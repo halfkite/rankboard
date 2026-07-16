@@ -1,0 +1,232 @@
+package cn.bamgdam.rankboard;
+
+import net.minecraft.datafixer.DataFixTypes;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
+import net.minecraft.nbt.NbtList;
+import net.minecraft.nbt.NbtString;
+import net.minecraft.registry.RegistryWrapper;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.world.PersistentState;
+
+import java.time.LocalDate;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.NavigableMap;
+import java.util.TreeMap;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.List;
+import java.util.UUID;
+
+/** Stores raw-stat baselines, allowing period ranks without modifying vanilla statistics. */
+public final class LeaderboardState extends PersistentState {
+    private static final String STATE_ID = "rankboard_leaderboard";
+    private final Map<RankBoardMod.Period, PeriodData> periods = new EnumMap<>(RankBoardMod.Period.class);
+    private boolean whitelistOnly = true;
+    private boolean botFilterEnabled = true;
+    private boolean customPlayerFilterEnabled = true;
+    private boolean onlineOnly;
+    private final Set<RankBoardMod.Metric> disabledDisplayMetrics = new HashSet<>();
+    private final Set<UUID> nameColorDisabledPlayers = new HashSet<>();
+    private final NavigableMap<LocalDate, Map<UUID, Map<RankBoardMod.Metric, Long>>> dailySnapshots = new TreeMap<>();
+    private LeaderboardState() { }
+
+    public static LeaderboardState get(MinecraftServer server) {
+        return server.getOverworld().getPersistentStateManager().getOrCreate(
+                new PersistentState.Type<>(LeaderboardState::new, LeaderboardState::fromNbt, DataFixTypes.SAVED_DATA_SCOREBOARD), STATE_ID);
+    }
+    private static LeaderboardState fromNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup lookup) {
+        LeaderboardState state = new LeaderboardState();
+        if (nbt.contains("whitelistOnly")) state.whitelistOnly = nbt.getBoolean("whitelistOnly");
+        if (nbt.contains("botFilterEnabled")) state.botFilterEnabled = nbt.getBoolean("botFilterEnabled");
+        if (nbt.contains("customPlayerFilterEnabled")) state.customPlayerFilterEnabled = nbt.getBoolean("customPlayerFilterEnabled");
+        if (nbt.contains("onlineOnly")) state.onlineOnly = nbt.getBoolean("onlineOnly");
+        for (NbtElement element : nbt.getList("disabledDisplayMetrics", NbtElement.STRING_TYPE)) {
+            try { state.disabledDisplayMetrics.add(RankBoardMod.Metric.valueOf(element.asString())); }
+            catch (IllegalArgumentException ignored) { }
+        }
+        for (NbtElement element : nbt.getList("nameColorDisabledPlayers", NbtElement.STRING_TYPE)) {
+            try { state.nameColorDisabledPlayers.add(UUID.fromString(element.asString())); }
+            catch (IllegalArgumentException ignored) { }
+        }
+        for (NbtElement element : nbt.getList("periods", NbtElement.COMPOUND_TYPE)) {
+            PeriodData data = PeriodData.fromNbt((NbtCompound) element);
+            state.periods.put(data.period, data);
+        }
+        for (NbtElement element : nbt.getList("dailySnapshots", NbtElement.COMPOUND_TYPE)) {
+            NbtCompound snapshot = (NbtCompound) element;
+            state.dailySnapshots.put(LocalDate.parse(snapshot.getString("date")), readPlayers(snapshot));
+        }
+        return state;
+    }
+    @Override public NbtCompound writeNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup lookup) {
+        NbtList list = new NbtList();
+        periods.values().forEach(data -> list.add(data.toNbt()));
+        nbt.put("periods", list);
+        nbt.putBoolean("whitelistOnly", whitelistOnly);
+        nbt.putBoolean("botFilterEnabled", botFilterEnabled);
+        nbt.putBoolean("customPlayerFilterEnabled", customPlayerFilterEnabled);
+        nbt.putBoolean("onlineOnly", onlineOnly);
+        NbtList disabledMetrics = new NbtList();
+        disabledDisplayMetrics.forEach(metric -> disabledMetrics.add(NbtString.of(metric.name())));
+        nbt.put("disabledDisplayMetrics", disabledMetrics);
+        NbtList disabledColors = new NbtList();
+        nameColorDisabledPlayers.forEach(uuid -> disabledColors.add(NbtString.of(uuid.toString())));
+        nbt.put("nameColorDisabledPlayers", disabledColors);
+        NbtList snapshots = new NbtList();
+        dailySnapshots.forEach((date, players) -> {
+            NbtCompound snapshot = new NbtCompound();
+            snapshot.putString("date", date.toString());
+            snapshot.put("players", writePlayers(players));
+            snapshots.add(snapshot);
+        });
+        nbt.put("dailySnapshots", snapshots);
+        return nbt;
+    }
+    public void rollPeriods(MinecraftServer server) {
+        if (!StatReader.isReady()) return;
+        LocalDate now = LocalDate.now();
+        boolean changed = false;
+        for (RankBoardMod.Period period : RankBoardMod.Period.values()) {
+            if (period == RankBoardMod.Period.ALL) continue;
+            PeriodData old = periods.get(period);
+            if (old == null || !old.key.equals(period.key(now))) {
+                PeriodData replacement = new PeriodData(period, period.key(now));
+                StatReader.readAll(server).forEach(replacement::capture);
+                periods.put(period, replacement);
+                changed = true;
+            }
+        }
+        if (!dailySnapshots.containsKey(now)) {
+            Map<UUID, Map<RankBoardMod.Metric, Long>> values = new HashMap<>();
+            StatReader.readAll(server).forEach(snapshot -> values.put(snapshot.uuid(), new EnumMap<>(snapshot.values())));
+            dailySnapshots.put(now, values);
+            changed = true;
+        }
+        if (changed) markDirty();
+    }
+    public void ensurePlayer(ServerPlayerEntity player) {
+        rollPeriods(player.getServer());
+        StatSnapshot snapshot = StatSnapshot.fromPlayer(player);
+        boolean changed = false;
+        for (PeriodData data : periods.values()) if (data.players.putIfAbsent(snapshot.uuid(), snapshot.values()) == null) changed = true;
+        if (changed) markDirty();
+    }
+    public long getBaseline(RankBoardMod.Period period, UUID uuid, RankBoardMod.Metric metric) {
+        PeriodData data = periods.get(period);
+        return data == null ? 0 : data.players.getOrDefault(uuid, Map.of()).getOrDefault(metric, 0L);
+    }
+    public boolean isWhitelistOnly() { return whitelistOnly; }
+    public void setWhitelistOnly(boolean whitelistOnly) {
+        if (this.whitelistOnly != whitelistOnly) {
+            this.whitelistOnly = whitelistOnly;
+            markDirty();
+        }
+    }
+    public boolean isBotFilterEnabled() { return botFilterEnabled; }
+    public void setBotFilterEnabled(boolean enabled) {
+        if (botFilterEnabled != enabled) {
+            botFilterEnabled = enabled;
+            markDirty();
+        }
+    }
+    public boolean isCustomPlayerFilterEnabled() { return customPlayerFilterEnabled; }
+    public void setCustomPlayerFilterEnabled(boolean enabled) {
+        if (customPlayerFilterEnabled != enabled) {
+            customPlayerFilterEnabled = enabled;
+            markDirty();
+        }
+    }
+    public boolean isOnlineOnly() { return onlineOnly; }
+    public void setOnlineOnly(boolean enabled) {
+        if (onlineOnly != enabled) {
+            onlineOnly = enabled;
+            markDirty();
+        }
+    }
+    public boolean isMetricDisplayEnabled(RankBoardMod.Metric metric) { return !disabledDisplayMetrics.contains(metric); }
+    public void setMetricDisplayEnabled(RankBoardMod.Metric metric, boolean enabled) {
+        boolean changed = enabled ? disabledDisplayMetrics.remove(metric) : disabledDisplayMetrics.add(metric);
+        if (changed) markDirty();
+    }
+    public boolean isNameColorEnabled(UUID uuid) { return !nameColorDisabledPlayers.contains(uuid); }
+    public void setNameColorEnabled(UUID uuid, boolean enabled) {
+        boolean changed = enabled ? nameColorDisabledPlayers.remove(uuid) : nameColorDisabledPlayers.add(uuid);
+        if (changed) markDirty();
+    }
+
+    public RangeData range(MinecraftServer server, LocalDate from, LocalDate to, RankBoardMod.Metric metric) {
+        if (!StatReader.isReady()) {
+            throw new IllegalStateException("历史统计缓存仍在加载（" + StatReader.progress() + "），请稍后再查询日期范围。");
+        }
+        if (to.isBefore(from)) throw new IllegalArgumentException("结束日期不能早于开始日期");
+        Map.Entry<LocalDate, Map<UUID, Map<RankBoardMod.Metric, Long>>> start = dailySnapshots.ceilingEntry(from);
+        if (start == null || start.getKey().isAfter(to)) {
+            throw new IllegalArgumentException("该日期早于可用快照；最早可查询日期为 " + earliestSnapshotDate());
+        }
+        Map<UUID, Long> endValues = new HashMap<>();
+        LocalDate today = LocalDate.now();
+        LocalDate endBoundary;
+        if (!to.isBefore(today)) {
+            endBoundary = today;
+            StatReader.readAll(server, metric).forEach(snapshot -> endValues.put(snapshot.uuid(), snapshot.value(metric)));
+        } else {
+            Map.Entry<LocalDate, Map<UUID, Map<RankBoardMod.Metric, Long>>> end = dailySnapshots.ceilingEntry(to.plusDays(1));
+            if (end == null) throw new IllegalArgumentException("结束日期尚无完整快照");
+            endBoundary = end.getKey();
+            end.getValue().forEach((uuid, values) -> endValues.put(uuid, values.getOrDefault(metric, 0L)));
+        }
+        Map<UUID, Long> result = new HashMap<>();
+        for (Map.Entry<UUID, Long> entry : endValues.entrySet()) {
+            long base = start.getValue().getOrDefault(entry.getKey(), Map.of()).getOrDefault(metric, 0L);
+            result.put(entry.getKey(), Math.max(0, entry.getValue() - base));
+        }
+        return new RangeData(start.getKey(), endBoundary, result);
+    }
+
+    public String earliestSnapshotDate() {
+        return dailySnapshots.isEmpty() ? "暂无" : dailySnapshots.firstKey().toString();
+    }
+
+    public record RangeData(LocalDate actualStart, LocalDate actualEnd, Map<UUID, Long> values) { }
+
+    private static NbtList writePlayers(Map<UUID, Map<RankBoardMod.Metric, Long>> players) {
+        NbtList list = new NbtList();
+        players.forEach((uuid, values) -> {
+            NbtCompound entry = new NbtCompound();
+            entry.putUuid("uuid", uuid);
+            values.forEach((metric, value) -> entry.putLong(metric.command, value));
+            list.add(entry);
+        });
+        return list;
+    }
+
+    private static Map<UUID, Map<RankBoardMod.Metric, Long>> readPlayers(NbtCompound owner) {
+        Map<UUID, Map<RankBoardMod.Metric, Long>> players = new HashMap<>();
+        for (NbtElement element : owner.getList("players", NbtElement.COMPOUND_TYPE)) {
+            NbtCompound entry = (NbtCompound) element;
+            Map<RankBoardMod.Metric, Long> values = new EnumMap<>(RankBoardMod.Metric.class);
+            for (RankBoardMod.Metric metric : RankBoardMod.Metric.values()) values.put(metric, entry.getLong(metric.command));
+            players.put(entry.getUuid("uuid"), values);
+        }
+        return players;
+    }
+    private static final class PeriodData {
+        final RankBoardMod.Period period; final String key;
+        final Map<UUID, Map<RankBoardMod.Metric, Long>> players = new HashMap<>();
+        PeriodData(RankBoardMod.Period period, String key) { this.period = period; this.key = key; }
+        void capture(StatSnapshot snapshot) { players.put(snapshot.uuid(), snapshot.values()); }
+        NbtCompound toNbt() {
+            NbtCompound nbt = new NbtCompound(); nbt.putString("period", period.name()); nbt.putString("key", key);
+            nbt.put("players", writePlayers(players)); return nbt;
+        }
+        static PeriodData fromNbt(NbtCompound nbt) {
+            PeriodData data = new PeriodData(RankBoardMod.Period.valueOf(nbt.getString("period")), nbt.getString("key"));
+            data.players.putAll(readPlayers(nbt));
+            return data;
+        }
+    }
+}

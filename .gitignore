@@ -1,0 +1,37 @@
+# Gradle and build outputs
+.gradle/
+build/
+out/
+*.class
+
+# Local toolchains and temporary files
+.tools/
+.tmp/
+gradle-*-bin.zip
+hs_err_pid*
+
+# Development Minecraft server data (contains player/world data)
+run/
+crash-reports/
+logs/
+rankboard-history-cache.json
+rankboard-web.properties
+rankboard.properties
+usercache.json
+whitelist.json
+ops.json
+banned-*.json
+
+# Local agent and IDE metadata
+.agents/
+.codex/
+.idea/
+.vscode/
+*.iml
+
+# OS and deployment artifacts
+.DS_Store
+Thumbs.db
+*.jar.pending*
+*.disabled
+*.disabled-*

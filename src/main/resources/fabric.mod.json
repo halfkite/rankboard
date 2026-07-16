@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "rankboard",
+  "version": "${version}",
+  "name": "RankBoard",
+  "description": "Server-side vanilla-stat leaderboards with rolling daily, weekly, monthly, yearly, and all-time periods.",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["cn.bamgdam.rankboard.RankBoardMod"]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.14",
+    "minecraft": "~1.21.1",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}

@@ -9,7 +9,7 @@
     "main": ["cn.bamgdam.rankboard.RankBoardMod"]
   },
   "depends": {
-    "fabricloader": ">=${loader_version}",
+    "fabricloader": ">=${minimum_loader_version}",
     "minecraft": "${minecraft_version}",
     "java": ">=21",
     "fabric-api": "*"

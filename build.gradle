@@ -83,13 +83,14 @@ tasks.register('webBuild', Exec) {
 
 processResources {
     dependsOn tasks.named('webBuild')
+    def minimumLoaderVersion = versionParts[0] >= 26 ? '0.18.6' : '0.16.14'
     inputs.property 'version', project.version
     inputs.property 'minecraft_version', project.minecraft_version
-    inputs.property 'loader_version', project.loader_version
+    inputs.property 'minimum_loader_version', minimumLoaderVersion
     filesMatching('fabric.mod.json') {
         expand 'version': inputs.properties.version,
                 'minecraft_version': inputs.properties.minecraft_version,
-                'loader_version': inputs.properties.loader_version
+                'minimum_loader_version': inputs.properties.minimum_loader_version
     }
     from('web/dist') {
         into 'rankboard-web'

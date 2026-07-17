@@ -247,7 +247,7 @@ website-icon=server-icon.png
 
 **中文**：`server-name=auto` 自动读取服务端 `server.properties` 内的 MOTD 作为网站服务器名称。
 
-**英文**: `server-name=auto` automatically reads the MOTD in`server.properties` as the server name displayed on the website\.
+**English**: `server-name=auto` automatically reads the MOTD in`server.properties` as the server name displayed on the website\.
 
 ### API 接口 \| API Endpoints
 

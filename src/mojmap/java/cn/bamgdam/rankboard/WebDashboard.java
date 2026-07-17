@@ -40,7 +40,7 @@ final class WebDashboard {
         if (http != null) return;
         minecraft = server;
         try {
-            Properties config = loadConfig(server.getRunDirectory().resolve("rankboard-web.properties"));
+            Properties config = loadConfig(server.getServerDirectory().resolve("rankboard-web.properties"));
             String host = config.getProperty("host", "0.0.0.0");
             int port = Integer.parseInt(config.getProperty("port", "8765"));
             serverName = resolveServerName(server, config.getProperty("server-name", "auto"));
@@ -97,7 +97,7 @@ final class WebDashboard {
     }
 
     private static Path resolveIcon(MinecraftServer server, String configuredPath) {
-        Path runDirectory = server.getRunDirectory();
+        Path runDirectory = server.getServerDirectory();
         Path configured = Path.of(configuredPath.strip());
         if (!configured.isAbsolute()) configured = runDirectory.resolve(configured);
         configured = configured.normalize();
@@ -113,7 +113,7 @@ final class WebDashboard {
         String value = configuredName.strip();
         if (!value.equalsIgnoreCase("auto") && !value.isEmpty()) return value;
         Properties serverProperties = new Properties();
-        Path path = server.getRunDirectory().resolve("server.properties");
+        Path path = server.getServerDirectory().resolve("server.properties");
         try (var reader = Files.newBufferedReader(path)) {
             serverProperties.load(reader);
             String motd = serverProperties.getProperty("motd", "Minecraft Server")
@@ -245,7 +245,7 @@ final class WebDashboard {
     private static boolean isIncluded(MinecraftServer server, LeaderboardState state, UUID uuid, String name,
                                       boolean onlineOnly) {
         return RankBoardMod.isIncluded(server, state, uuid, name)
-                && (!onlineOnly || server.getPlayerManager().getPlayer(uuid) != null);
+                && (!onlineOnly || server.getPlayerList().getPlayer(uuid) != null);
     }
 
     private static void site(HttpExchange exchange) throws IOException {

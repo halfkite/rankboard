@@ -57,7 +57,7 @@ final class BoardService {
     }
 
     static int enable(ServerCommandSource source, ServerPlayerEntity player, RankBoardMod.Period period, RankBoardMod.Metric metric) {
-        if (!LeaderboardState.get(player.getServer()).isMetricDisplayEnabled(metric)) {
+        if (!LeaderboardState.get(PlayerCompat.server(player)).isMetricDisplayEnabled(metric)) {
             source.sendError(Text.literal(metric.label + " 当前已被 OP 禁止显示。"));
             return 0;
         }
@@ -120,15 +120,15 @@ final class BoardService {
     }
 
     private static void sendPrivate(ServerPlayerEntity player, RankBoardMod.Period period, RankBoardMod.Metric metric) {
-        ScoreboardObjective objective = syncObjective(player.getServer(), period, metric, true);
-        sendPackets(player, objective, RankBoardMod.entries(player.getServer(), period, metric), metric);
+        ScoreboardObjective objective = syncObjective(PlayerCompat.server(player), period, metric, true);
+        sendPackets(player, objective, RankBoardMod.entries(PlayerCompat.server(player), period, metric), metric);
     }
 
     private static void sendPackets(ServerPlayerEntity player, ScoreboardObjective objective,
                                     List<RankBoardMod.Entry> entries, RankBoardMod.Metric metric) {
         removePrivateObjective(player);
         Map<String, ServerPlayerEntity> onlinePlayers = new HashMap<>();
-        for (ServerPlayerEntity onlinePlayer : player.getServer().getPlayerManager().getPlayerList()) {
+        for (ServerPlayerEntity onlinePlayer : PlayerCompat.server(player).getPlayerManager().getPlayerList()) {
             onlinePlayers.put(onlinePlayer.getName().getString(), onlinePlayer);
         }
         player.networkHandler.sendPacket(new ScoreboardObjectiveUpdateS2CPacket(objective, ScoreboardObjectiveUpdateS2CPacket.ADD_MODE));
@@ -143,7 +143,7 @@ final class BoardService {
             ServerPlayerEntity entryPlayer = onlinePlayers.get(entry.name());
             Selection entrySelection = entryPlayer == null ? null : SELECTIONS.get(entryPlayer.getUuid());
             if (entryPlayer != null && entrySelection != null
-                    && LeaderboardState.get(player.getServer()).isNameColorEnabled(entryPlayer.getUuid())) {
+                    && LeaderboardState.get(PlayerCompat.server(player)).isNameColorEnabled(entryPlayer.getUuid())) {
                 displayName = Optional.of(Text.literal(entry.name()).formatted(entrySelection.metric.nameColor));
             }
             player.networkHandler.sendPacket(new ScoreboardScoreUpdateS2CPacket(
@@ -226,7 +226,7 @@ final class BoardService {
     private static void removePrivateObjective(ServerPlayerEntity player) {
         String oldName = CLIENT_OBJECTIVES.remove(player.getUuid());
         if (oldName == null) return;
-        ScoreboardObjective oldObjective = player.getServer().getScoreboard().getNullableObjective(oldName);
+        ScoreboardObjective oldObjective = PlayerCompat.server(player).getScoreboard().getNullableObjective(oldName);
         if (oldObjective != null) {
             player.networkHandler.sendPacket(new ScoreboardObjectiveUpdateS2CPacket(
                     oldObjective, ScoreboardObjectiveUpdateS2CPacket.REMOVE_MODE));

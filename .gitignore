@@ -4,6 +4,17 @@ build/
 out/
 *.class
 
+# Optional React frontend workspace
+web/node_modules/
+web/dist/
+web/.vite/
+web/*.tsbuildinfo
+web/vite.config.js
+web/vite.config.d.ts
+
+# Collected release artifacts
+multi-version-builds/
+
 # Local toolchains and temporary files
 .tools/
 .tmp/

@@ -69,11 +69,11 @@ public final class RankBoardMod implements ModInitializer {
     private void registerCommands(com.mojang.brigadier.CommandDispatcher<ServerCommandSource> dispatcher,
                                   CommandRegistryAccess registryAccess, CommandManager.RegistrationEnvironment environment) {
         LiteralArgumentBuilder<ServerCommandSource> root = CommandManager.literal("leaderboard")
-                .requires(source -> source.hasPermissionLevel(0)).executes(context -> menu(context.getSource()));
+                .requires(source -> CommandPermissionCompat.has(source, 0)).executes(context -> menu(context.getSource()));
         root.then(CommandManager.literal("help").executes(context -> help(context.getSource())));
         root.then(CommandManager.literal("display")
                 .then(CommandManager.literal("off").executes(context -> BoardService.disable(context.getSource()))
-                        .then(CommandManager.argument("player", EntityArgumentType.player()).requires(source -> source.hasPermissionLevel(2))
+                        .then(CommandManager.argument("player", EntityArgumentType.player()).requires(source -> CommandPermissionCompat.has(source, 2))
                                 .executes(context -> BoardService.disable(context.getSource(),
                                         EntityArgumentType.getPlayer(context, "player")))))
                 .then(buildSelectionCommands(false)));
@@ -82,7 +82,7 @@ public final class RankBoardMod implements ModInitializer {
                 .then(CommandManager.literal("off").executes(context -> setNameColor(context.getSource(), false)))
                 .then(CommandManager.literal("status").executes(context -> nameColorStatus(context.getSource()))));
         LiteralArgumentBuilder<ServerCommandSource> displayFilter = CommandManager.literal("displayfilter")
-                .requires(source -> source.hasPermissionLevel(2));
+                .requires(source -> CommandPermissionCompat.has(source, 2));
         for (Metric metric : Metric.values()) {
             displayFilter.then(CommandManager.literal(metric.command)
                     .then(CommandManager.literal("enable").executes(context -> setMetricDisplay(context.getSource(), metric, true)))
@@ -90,31 +90,31 @@ public final class RankBoardMod implements ModInitializer {
                     .then(CommandManager.literal("status").executes(context -> metricDisplayStatus(context.getSource(), metric))));
         }
         root.then(displayFilter);
-        root.then(CommandManager.literal("scoreboard").requires(source -> source.hasPermissionLevel(2))
+        root.then(CommandManager.literal("scoreboard").requires(source -> CommandPermissionCompat.has(source, 2))
                 .then(CommandManager.literal("clear").executes(context -> BoardService.clearVanilla(context.getSource())))
                 .then(buildSelectionCommands(true)));
-        root.then(CommandManager.literal("whitelist").requires(source -> source.hasPermissionLevel(2))
+        root.then(CommandManager.literal("whitelist").requires(source -> CommandPermissionCompat.has(source, 2))
                 .then(CommandManager.literal("on").executes(context -> setWhitelistOnly(context.getSource(), true)))
                 .then(CommandManager.literal("off").executes(context -> setWhitelistOnly(context.getSource(), false)))
                 .then(CommandManager.literal("status").executes(context -> whitelistStatus(context.getSource()))));
-        root.then(CommandManager.literal("botfilter").requires(source -> source.hasPermissionLevel(2))
+        root.then(CommandManager.literal("botfilter").requires(source -> CommandPermissionCompat.has(source, 2))
                 .then(CommandManager.literal("on").executes(context -> setBotFilter(context.getSource(), true)))
                 .then(CommandManager.literal("off").executes(context -> setBotFilter(context.getSource(), false)))
                 .then(CommandManager.literal("status").executes(context -> botFilterStatus(context.getSource()))));
-        root.then(CommandManager.literal("customfilter").requires(source -> source.hasPermissionLevel(2))
+        root.then(CommandManager.literal("customfilter").requires(source -> CommandPermissionCompat.has(source, 2))
                 .then(CommandManager.literal("on").executes(context -> setCustomFilter(context.getSource(), true)))
                 .then(CommandManager.literal("off").executes(context -> setCustomFilter(context.getSource(), false)))
                 .then(CommandManager.literal("status").executes(context -> customFilterStatus(context.getSource()))));
-        root.then(CommandManager.literal("onlinefilter").requires(source -> source.hasPermissionLevel(2))
+        root.then(CommandManager.literal("onlinefilter").requires(source -> CommandPermissionCompat.has(source, 2))
                 .then(CommandManager.literal("on").executes(context -> setOnlineFilter(context.getSource(), true)))
                 .then(CommandManager.literal("off").executes(context -> setOnlineFilter(context.getSource(), false)))
                 .then(CommandManager.literal("status").executes(context -> onlineFilterStatus(context.getSource()))));
-        root.then(CommandManager.literal("lookup").requires(source -> source.hasPermissionLevel(2))
+        root.then(CommandManager.literal("lookup").requires(source -> CommandPermissionCompat.has(source, 2))
                 .then(CommandManager.literal("whitelist").executes(context -> MojangNameLookup.lookupWhitelist(context.getSource())))
                 .then(CommandManager.argument("uuid", StringArgumentType.word())
                         .executes(context -> MojangNameLookup.lookupOne(context.getSource(),
                                 StringArgumentType.getString(context, "uuid")))));
-        root.then(CommandManager.literal("cache").requires(source -> source.hasPermissionLevel(2))
+        root.then(CommandManager.literal("cache").requires(source -> CommandPermissionCompat.has(source, 2))
                 .then(CommandManager.literal("status").executes(context -> cacheStatus(context.getSource())))
                 .then(CommandManager.literal("reload").executes(context -> reloadCache(context.getSource()))));
         for (Period period : Period.values()) {
@@ -141,7 +141,7 @@ public final class RankBoardMod implements ModInitializer {
                                 : BoardService.enable(context.getSource(), period, metric));
                 if (!vanilla) {
                     metricNode.then(CommandManager.argument("player", EntityArgumentType.player())
-                            .requires(source -> source.hasPermissionLevel(2))
+                            .requires(source -> CommandPermissionCompat.has(source, 2))
                             .executes(context -> BoardService.enable(context.getSource(),
                                     EntityArgumentType.getPlayer(context, "player"), period, metric)));
                 }
@@ -181,11 +181,9 @@ public final class RankBoardMod implements ModInitializer {
         for (Metric metric : Metric.values()) {
             if (!LeaderboardState.get(source.getServer()).isMetricDisplayEnabled(metric)) continue;
             Text button = Text.literal("[" + metric.label + "]")
-                    .setStyle(Style.EMPTY.withColor(metric.nameColor)
-                            .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND,
-                                    "/leaderboard display show all " + metric.command))
-                            .withHoverEvent(new net.minecraft.text.HoverEvent(net.minecraft.text.HoverEvent.Action.SHOW_TEXT,
-                                    Text.literal("点击显示总计 " + metric.label + " 侧边栏"))));
+                    .setStyle(TextCompat.interactive(Style.EMPTY.withColor(metric.nameColor),
+                            "/leaderboard display show all " + metric.command,
+                            Text.literal("点击显示总计 " + metric.label + " 侧边栏")));
             if (visible > 0 && visible % 4 == 0) {
                 Text completed = line;
                 source.sendFeedback(() -> completed, false);
@@ -354,8 +352,7 @@ public final class RankBoardMod implements ModInitializer {
     static boolean isIncluded(net.minecraft.server.MinecraftServer server, LeaderboardState state,
                               java.util.UUID uuid, String name) {
         String normalized = name.toLowerCase(java.util.Locale.ROOT);
-        return (!state.isWhitelistOnly() || server.getPlayerManager().getWhitelist()
-                .isAllowed(new GameProfile(uuid, name)))
+        return (!state.isWhitelistOnly() || PlayerDirectoryCompat.isAllowed(server, uuid, name))
                 && (!state.isBotFilterEnabled() || !normalized.startsWith("bot_"))
                 && (!state.isCustomPlayerFilterEnabled() || !normalized.startsWith("unknown_"))
                 && (!state.isOnlineOnly() || server.getPlayerManager().getPlayer(uuid) != null);

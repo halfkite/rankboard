@@ -3,11 +3,10 @@ package cn.bamgdam.rankboard;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.authlib.GameProfile;
+import net.minecraft.ChatFormatting;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -33,37 +32,37 @@ final class MojangNameLookup {
 
     private MojangNameLookup() { }
 
-    static int lookupOne(ServerCommandSource source, String input) {
+    static int lookupOne(CommandSourceStack source, String input) {
         UUID uuid;
         try {
             uuid = parseUuid(input);
         } catch (IllegalArgumentException exception) {
-            source.sendError(Text.literal("UUID 格式无效：" + input));
+            source.sendFailure(Component.literal("UUID 格式无效：" + input));
             return 0;
         }
-        source.sendFeedback(() -> Text.literal("正在向 Mojang 查询 " + uuid + " ...").formatted(Formatting.GRAY), false);
+        source.sendSuccess(() -> Component.literal("正在向 Mojang 查询 " + uuid + " ...").withStyle(ChatFormatting.GRAY), false);
         MinecraftServer server = source.getServer();
         query(uuid).thenAccept(result -> server.execute(() -> {
             if (result.name != null) {
                 cache(server, result);
-                source.sendFeedback(() -> Text.literal(result.uuid + " -> " + result.name)
-                        .formatted(Formatting.GRAY), false);
+                source.sendSuccess(() -> Component.literal(result.uuid + " -> " + result.name)
+                        .withStyle(ChatFormatting.GRAY), false);
             } else {
-                source.sendError(Text.literal(result.uuid + " 查询失败：" + result.error));
+                source.sendFailure(Component.literal(result.uuid + " 查询失败：" + result.error));
             }
         }));
         return 1;
     }
 
-    static int lookupWhitelist(ServerCommandSource source) {
+    static int lookupWhitelist(CommandSourceStack source) {
         MinecraftServer server = source.getServer();
         Map<UUID, String> whitelist = StatReader.readWhitelistNames(server);
         if (whitelist.isEmpty()) {
-            source.sendError(Text.literal("服务器白名单为空或无法读取 whitelist.json。"));
+            source.sendFailure(Component.literal("服务器白名单为空或无法读取 whitelist.json。"));
             return 0;
         }
-        source.sendFeedback(() -> Text.literal("正在查询白名单中的 " + whitelist.size() + " 个 UUID ...")
-                .formatted(Formatting.GRAY), false);
+        source.sendSuccess(() -> Component.literal("正在查询白名单中的 " + whitelist.size() + " 个 UUID ...")
+                .withStyle(ChatFormatting.GRAY), false);
         List<CompletableFuture<Result>> futures = whitelist.keySet().stream().map(MojangNameLookup::query).toList();
         CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).thenRun(() -> {
             List<Result> results = futures.stream().map(CompletableFuture::join).toList();
@@ -72,7 +71,7 @@ final class MojangNameLookup {
         return whitelist.size();
     }
 
-    private static void finishWhitelistLookup(ServerCommandSource source, MinecraftServer server,
+    private static void finishWhitelistLookup(CommandSourceStack source, MinecraftServer server,
                                               Map<UUID, String> whitelist, List<Result> results) {
         List<String> lines = new ArrayList<>();
         int success = 0;
@@ -89,7 +88,7 @@ final class MojangNameLookup {
         }
         PlayerDirectoryCompat.saveCache(server);
         String message = "白名单名称查询完成：成功 " + success + "/" + results.size() + "\n" + String.join("\n", lines);
-        source.sendFeedback(() -> Text.literal(message).formatted(Formatting.GRAY), false);
+        source.sendSuccess(() -> Component.literal(message).withStyle(ChatFormatting.GRAY), false);
     }
 
     private static void cache(MinecraftServer server, Result result) {

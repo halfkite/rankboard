@@ -42,7 +42,7 @@ final class StatReader {
     private static final AtomicInteger PROCESSED = new AtomicInteger();
     private static final AtomicInteger TOTAL = new AtomicInteger();
     private static final AtomicLong GENERATION = new AtomicLong();
-    private static final int PERSISTENT_CACHE_SCHEMA = 3;
+    private static final int PERSISTENT_CACHE_SCHEMA = 4;
     private static final ExecutorService LOADER = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "RankBoard-HistoryLoader");
         thread.setDaemon(true);
@@ -389,6 +389,7 @@ final class StatReader {
             case ELYTRA_DISTANCE -> stat(stats, "minecraft:custom", "minecraft:aviate_one_cm");
             case FISHING -> stat(stats, "minecraft:custom", "minecraft:fish_caught");
             case DAMAGE_TAKEN -> stat(stats, "minecraft:custom", "minecraft:damage_taken");
+            case DAMAGE_DEALT -> stat(stats, "minecraft:custom", "minecraft:damage_dealt");
             case DROPPED -> sum(stats, "minecraft:dropped");
             case PICKED_UP -> sum(stats, "minecraft:picked_up");
             case CRAFTED -> sum(stats, "minecraft:crafted");

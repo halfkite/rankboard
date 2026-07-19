@@ -4,11 +4,11 @@
 
 RankBoard 是一个 Fabric 服务端排行榜模组。玩家不需要安装客户端模组，即可使用原版计分板和网页查看排行榜。
 
-当前版本：`1.5.1`
+当前版本：`1.5.2`
 
 ### 功能与用途
 
-- **多项统计**：记录食物、跳跃、挖掘、放置、击杀、死亡、交易、在线时间、鞘翅飞行、钓鱼、受伤害、丢弃、拾取、合成和红石元件放置，用于制作生存、活动和竞技排行榜。
+- **多项统计**：记录食物、跳跃、挖掘、放置、击杀、死亡、交易、在线时间、鞘翅飞行、钓鱼、受伤害、伤害输出、丢弃、拾取、合成和红石元件放置，用于制作生存、活动和竞技排行榜。
 - **时间周期**：提供 `daily`、`weekly`、`monthly`、`yearly` 和 `all`，方便分别查看短期活动成绩和服务器长期记录。
 - **离线数据读取**：直接读取原版 `world/stats/*.json`，即使玩家当前不在线，也能保留并查询历史成绩。
 - **缓存与后台更新**：首次加载时控制读取速度，避免启动卡顿；之后只检查变化的文件，降低服务器持续开销。
@@ -113,6 +113,7 @@ metric-color-playtime=#55FFFF               # 在线榜：青色
 metric-color-elytra=#FF55FF
 metric-color-fishing=#0000AA                # 钓鱼榜：深蓝色
 metric-color-damage=#FF5555                 # 受伤榜：红色
+metric-color-dealt=#FFAA00                  # 伤害输出榜：金色
 metric-color-dropped=#555555
 metric-color-picked=#55FF55
 metric-color-crafted=#FFAA00
@@ -208,11 +209,11 @@ gradlew.bat build
 
 RankBoard is a server-side Fabric leaderboard mod. Players do not need a client-side mod to use the vanilla sidebar or the web dashboard.
 
-Current version: `1.5.1`
+Current version: `1.5.2`
 
 ### Features and purpose
 
-- **Multiple statistics**: Tracks food, jumps, mined and placed blocks, kills, deaths, trades, playtime, elytra distance, fishing, damage, dropped and picked-up items, crafted items, and placed redstone components.
+- **Multiple statistics**: Tracks food, jumps, mined and placed blocks, kills, deaths, trades, playtime, elytra distance, fishing, damage taken and damage dealt, dropped and picked-up items, crafted items, and placed redstone components.
 - **Time periods**: `daily`, `weekly`, `monthly`, `yearly`, and `all` separate short-term event results from long-term server records.
 - **Offline data**: Reads vanilla `world/stats/*.json`, so historical scores remain available when a player is offline.
 - **Caching and background updates**: Throttles the first scan to avoid startup stalls, then checks only changed files to reduce ongoing server work.

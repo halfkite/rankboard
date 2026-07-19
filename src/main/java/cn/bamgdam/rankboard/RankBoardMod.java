@@ -1096,7 +1096,7 @@ public final class RankBoardMod implements ModInitializer {
     static String format(Metric metric, long value) {
         if (metric == Metric.PLAY_TIME) return (value / 72000) + "h " + ((value / 1200) % 60) + "m";
         if (metric == Metric.ELYTRA_DISTANCE) return String.format(java.util.Locale.ROOT, "%.1f km", value / 100000.0);
-        if (metric == Metric.DAMAGE_TAKEN) return String.format(java.util.Locale.ROOT, "%.1f", value / 10.0);
+        if (metric == Metric.DAMAGE_TAKEN || metric == Metric.DAMAGE_DEALT) return String.format(java.util.Locale.ROOT, "%.1f", value / 10.0);
         return Long.toString(value);
     }
 
@@ -1124,6 +1124,7 @@ public final class RankBoardMod implements ModInitializer {
         ELYTRA_DISTANCE("elytra", "飞行榜", Formatting.LIGHT_PURPLE, p -> custom(p, Stats.AVIATE_ONE_CM)),
         FISHING("fishing", "钓鱼榜", Formatting.DARK_BLUE, p -> custom(p, Stats.FISH_CAUGHT)),
         DAMAGE_TAKEN("damage", "受伤榜", Formatting.RED, p -> custom(p, Stats.DAMAGE_TAKEN)),
+        DAMAGE_DEALT("dealt", "伤害输出榜", Formatting.GOLD, p -> custom(p, Stats.DAMAGE_DEALT)),
         DROPPED("dropped", "丢垃圾榜", Formatting.DARK_GRAY, RankBoardMod::dropped),
         PICKED_UP("picked", "拾荒榜", Formatting.GREEN, RankBoardMod::pickedUp),
         CRAFTED("crafted", "合成榜", Formatting.GOLD, RankBoardMod::crafted),

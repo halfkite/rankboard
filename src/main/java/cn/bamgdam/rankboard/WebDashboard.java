@@ -278,7 +278,7 @@ final class WebDashboard {
         return switch (metric) {
             case PLAY_TIME -> String.format(java.util.Locale.ROOT, "%,dh %dm", value / 72000, (value / 1200) % 60);
             case ELYTRA_DISTANCE -> String.format(java.util.Locale.ROOT, "%,.1f km", value / 100000.0);
-            case DAMAGE_TAKEN -> String.format(java.util.Locale.ROOT, "%,.1f", value / 10.0);
+            case DAMAGE_TAKEN, DAMAGE_DEALT -> String.format(java.util.Locale.ROOT, "%,.1f", value / 10.0);
             default -> {
                 String exact = String.format(java.util.Locale.ROOT, "%,d", value);
                 yield value > 100_000 ? (value / 10_000) + "w · " + exact : exact;

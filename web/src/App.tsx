@@ -86,7 +86,8 @@ const metrics: Metric[] = [
   { id: "trades", label: "交易榜", detail: "经济" },
   { id: "elytra", label: "鞘翅飞行榜", detail: "探索" },
   { id: "fishing", label: "钓鱼榜", detail: "休闲" },
-  { id: "damage", label: "受伤害榜", detail: "生存" }
+  { id: "damage", label: "受伤害榜", detail: "生存" },
+  { id: "dealt", label: "伤害输出榜", detail: "战斗" }
 ];
 
 const today = new Date().toISOString().slice(0, 10);

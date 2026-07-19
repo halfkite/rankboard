@@ -134,23 +134,54 @@ public final class LeaderboardState extends SavedData {
         if (!StatReader.isReady()) return;
         LocalDate now = LocalDate.now();
         boolean changed = false;
+        List<StatSnapshot> snapshots = StatReader.readAll(server);
         for (RankBoardMod.Period period : RankBoardMod.Period.values()) {
             if (period == RankBoardMod.Period.ALL) continue;
             PeriodData old = periods.get(period);
             if (old == null || !old.key.equals(period.key(now))) {
                 PeriodData replacement = new PeriodData(period, period.key(now));
-                StatReader.readAll(server).forEach(replacement::capture);
+                snapshots.forEach(replacement::capture);
                 periods.put(period, replacement);
                 changed = true;
             }
         }
         if (!dailySnapshots.containsKey(now)) {
             Map<UUID, Map<RankBoardMod.Metric, Long>> values = new HashMap<>();
-            StatReader.readAll(server).forEach(snapshot -> values.put(snapshot.uuid(), new EnumMap<>(snapshot.values())));
+            snapshots.forEach(snapshot -> values.put(snapshot.uuid(), new EnumMap<>(snapshot.values())));
             dailySnapshots.put(now, values);
             changed = true;
         }
+        if (backfillMissingMetrics(snapshots)) changed = true;
         if (changed) setDirty();
+    }
+
+    private boolean backfillMissingMetrics(List<StatSnapshot> snapshots) {
+        boolean changed = false;
+        for (PeriodData data : periods.values()) {
+            for (StatSnapshot snapshot : snapshots) {
+                Map<RankBoardMod.Metric, Long> values = data.players.computeIfAbsent(
+                        snapshot.uuid(), ignored -> new EnumMap<>(RankBoardMod.Metric.class));
+                for (RankBoardMod.Metric metric : RankBoardMod.Metric.values()) {
+                    if (!values.containsKey(metric)) {
+                        values.put(metric, snapshot.value(metric));
+                        changed = true;
+                    }
+                }
+            }
+        }
+        for (Map<UUID, Map<RankBoardMod.Metric, Long>> players : dailySnapshots.values()) {
+            for (StatSnapshot snapshot : snapshots) {
+                Map<RankBoardMod.Metric, Long> values = players.computeIfAbsent(
+                        snapshot.uuid(), ignored -> new EnumMap<>(RankBoardMod.Metric.class));
+                for (RankBoardMod.Metric metric : RankBoardMod.Metric.values()) {
+                    if (!values.containsKey(metric)) {
+                        values.put(metric, snapshot.value(metric));
+                        changed = true;
+                    }
+                }
+            }
+        }
+        return changed;
     }
     public void ensurePlayer(ServerPlayer player) {
         rollPeriods(PlayerCompat.server(player));
@@ -299,7 +330,9 @@ public final class LeaderboardState extends SavedData {
         for (Tag element : NbtCompat.getList(owner, "players", Tag.TAG_COMPOUND)) {
             CompoundTag entry = (CompoundTag) element;
             Map<RankBoardMod.Metric, Long> values = new EnumMap<>(RankBoardMod.Metric.class);
-            for (RankBoardMod.Metric metric : RankBoardMod.Metric.values()) values.put(metric, NbtCompat.getLong(entry, metric.command));
+            for (RankBoardMod.Metric metric : RankBoardMod.Metric.values()) {
+                if (entry.contains(metric.command)) values.put(metric, NbtCompat.getLong(entry, metric.command));
+            }
             players.put(NbtCompat.getUuid(entry, "uuid"), values);
         }
         return players;

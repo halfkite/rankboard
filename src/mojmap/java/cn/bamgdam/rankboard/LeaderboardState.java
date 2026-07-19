@@ -29,6 +29,7 @@ public final class LeaderboardState extends SavedData {
     private boolean onlineOnly;
     private final Set<RankBoardMod.Metric> disabledDisplayMetrics = new HashSet<>();
     private final Set<UUID> nameColorDisabledPlayers = new HashSet<>();
+    private final Set<UUID> lookMenuDisabledPlayers = new HashSet<>();
     private final Map<UUID, BoardPreference> boardPreferences = new HashMap<>();
     private BoardPreference globalBoardPreference;
     private final NavigableMap<LocalDate, Map<UUID, Map<RankBoardMod.Metric, Long>>> dailySnapshots = new TreeMap<>();
@@ -49,6 +50,10 @@ public final class LeaderboardState extends SavedData {
         }
         for (Tag element : NbtCompat.getList(nbt, "nameColorDisabledPlayers", Tag.TAG_STRING)) {
             try { state.nameColorDisabledPlayers.add(UUID.fromString(NbtCompat.asString(element))); }
+            catch (IllegalArgumentException ignored) { }
+        }
+        for (Tag element : NbtCompat.getList(nbt, "lookMenuDisabledPlayers", Tag.TAG_STRING)) {
+            try { state.lookMenuDisabledPlayers.add(UUID.fromString(NbtCompat.asString(element))); }
             catch (IllegalArgumentException ignored) { }
         }
         for (Tag element : NbtCompat.getList(nbt, "periods", Tag.TAG_COMPOUND)) {
@@ -94,6 +99,9 @@ public final class LeaderboardState extends SavedData {
         ListTag disabledColors = new ListTag();
         nameColorDisabledPlayers.forEach(uuid -> disabledColors.add(StringTag.valueOf(uuid.toString())));
         nbt.put("nameColorDisabledPlayers", disabledColors);
+        ListTag disabledLookMenus = new ListTag();
+        lookMenuDisabledPlayers.forEach(uuid -> disabledLookMenus.add(StringTag.valueOf(uuid.toString())));
+        nbt.put("lookMenuDisabledPlayers", disabledLookMenus);
         ListTag snapshots = new ListTag();
         dailySnapshots.forEach((date, players) -> {
             CompoundTag snapshot = new CompoundTag();
@@ -191,6 +199,12 @@ public final class LeaderboardState extends SavedData {
     public boolean isNameColorEnabled(UUID uuid) { return !nameColorDisabledPlayers.contains(uuid); }
     public void setNameColorEnabled(UUID uuid, boolean enabled) {
         boolean changed = enabled ? nameColorDisabledPlayers.remove(uuid) : nameColorDisabledPlayers.add(uuid);
+        if (changed) setDirty();
+    }
+
+    public boolean isLookMenuEnabled(UUID uuid) { return !lookMenuDisabledPlayers.contains(uuid); }
+    public void setLookMenuEnabled(UUID uuid, boolean enabled) {
+        boolean changed = enabled ? lookMenuDisabledPlayers.remove(uuid) : lookMenuDisabledPlayers.add(uuid);
         if (changed) setDirty();
     }
 

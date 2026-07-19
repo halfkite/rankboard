@@ -37,10 +37,11 @@ final class StatReader {
     private static final Map<UUID, Long> SOURCE_MODIFIED = new ConcurrentHashMap<>();
     private static final Set<String> FOOD_ITEMS = ConcurrentHashMap.newKeySet();
     private static final Set<String> BLOCK_ITEMS = ConcurrentHashMap.newKeySet();
+    private static final Set<String> REDSTONE_COMPONENT_ITEMS = ConcurrentHashMap.newKeySet();
     private static final AtomicInteger PROCESSED = new AtomicInteger();
     private static final AtomicInteger TOTAL = new AtomicInteger();
     private static final AtomicLong GENERATION = new AtomicLong();
-    private static final int PERSISTENT_CACHE_SCHEMA = 1;
+    private static final int PERSISTENT_CACHE_SCHEMA = 3;
     private static final ExecutorService LOADER = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "RankBoard-HistoryLoader");
         thread.setDaemon(true);
@@ -356,10 +357,12 @@ final class StatReader {
     private static void prepareItemSets() {
         FOOD_ITEMS.clear();
         BLOCK_ITEMS.clear();
+        REDSTONE_COMPONENT_ITEMS.clear();
         for (Item item : BuiltInRegistries.ITEM) {
             String id = BuiltInRegistries.ITEM.getKey(item).toString();
             if (item.components().get(DataComponents.FOOD) != null) FOOD_ITEMS.add(id);
             if (item instanceof BlockItem) BLOCK_ITEMS.add(id);
+            if (RankBoardMod.isRedstoneComponent(item)) REDSTONE_COMPONENT_ITEMS.add(id);
         }
     }
 
@@ -401,6 +404,10 @@ final class StatReader {
             case ELYTRA_DISTANCE -> stat(stats, "minecraft:custom", "minecraft:aviate_one_cm");
             case FISHING -> stat(stats, "minecraft:custom", "minecraft:fish_caught");
             case DAMAGE_TAKEN -> stat(stats, "minecraft:custom", "minecraft:damage_taken");
+            case DROPPED -> sum(stats, "minecraft:dropped");
+            case PICKED_UP -> sum(stats, "minecraft:picked_up");
+            case CRAFTED -> sum(stats, "minecraft:crafted");
+            case REDSTONE_PLACED -> sumMatching(stats, "minecraft:used", REDSTONE_COMPONENT_ITEMS);
         };
     }
 

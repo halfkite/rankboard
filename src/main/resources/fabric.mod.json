@@ -8,6 +8,12 @@
   "entrypoints": {
     "main": ["cn.bamgdam.rankboard.RankBoardMod"]
   },
+  "mixins": [
+    {
+      "config": "rankboard.mixins.json",
+      "environment": "server"
+    }
+  ],
   "depends": {
     "fabricloader": ">=${minimum_loader_version}",
     "minecraft": "${minecraft_version}",

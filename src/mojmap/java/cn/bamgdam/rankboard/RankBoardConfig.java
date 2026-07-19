@@ -38,6 +38,38 @@ final class RankBoardConfig {
             option("client-scoreboard-show-zero", "false", FileKind.MAIN, "客户端计分板", "个人侧边栏是否显示当前榜单数值为 0 的玩家；默认 false。"),
             option("scoreboard-switch-message-enabled", "true", FileKind.MAIN, "客户端计分板", "切换个人榜单后是否发送“已显示……”提示；默认 true。"),
             option("scoreboard-name-color-enabled", "true", FileKind.MAIN, "客户端计分板", "是否根据玩家当前榜单给名字着色；默认 true。"),
+            option("player-name-color-render-mode", "legacy", FileKind.MAIN, "客户端计分板", "玩家名字颜色渲染模式；legacy 全部映射为原版 16 色，rgb 允许聊天、TAB 与排行榜使用精确 RGB。"),
+            option("rankboard-defaults-version", "2", FileKind.MAIN, "配置兼容", "RankBoard 默认预设迁移版本；由模组自动维护，请勿手动降低。"),
+            option("metric-label-food", "大胃王榜", FileKind.MAIN, "榜单名称", "大胃王榜在游戏和网页结果中显示的名称。"),
+            option("metric-label-jumps", "跳跃榜", FileKind.MAIN, "榜单名称", "跳跃榜在游戏和网页结果中显示的名称。"),
+            option("metric-label-mined", "挖掘榜", FileKind.MAIN, "榜单名称", "挖掘榜在游戏和网页结果中显示的名称。"),
+            option("metric-label-placed", "放置榜", FileKind.MAIN, "榜单名称", "放置榜在游戏和网页结果中显示的名称。"),
+            option("metric-label-kills", "击杀榜", FileKind.MAIN, "榜单名称", "击杀榜在游戏和网页结果中显示的名称。"),
+            option("metric-label-deaths", "死亡榜", FileKind.MAIN, "榜单名称", "死亡榜在游戏和网页结果中显示的名称。"),
+            option("metric-label-trades", "交易榜", FileKind.MAIN, "榜单名称", "交易榜在游戏和网页结果中显示的名称。"),
+            option("metric-label-playtime", "在线榜", FileKind.MAIN, "榜单名称", "在线榜在游戏和网页结果中显示的名称。"),
+            option("metric-label-elytra", "飞行榜", FileKind.MAIN, "榜单名称", "飞行榜在游戏和网页结果中显示的名称。"),
+            option("metric-label-fishing", "钓鱼榜", FileKind.MAIN, "榜单名称", "钓鱼榜在游戏和网页结果中显示的名称。"),
+            option("metric-label-damage", "受伤榜", FileKind.MAIN, "榜单名称", "受伤榜在游戏和网页结果中显示的名称。"),
+            option("metric-label-dropped", "丢垃圾榜", FileKind.MAIN, "榜单名称", "丢弃物品数量榜在游戏和网页结果中显示的名称。"),
+            option("metric-label-picked", "拾荒榜", FileKind.MAIN, "榜单名称", "捡起物品数量榜在游戏和网页结果中显示的名称。"),
+            option("metric-label-crafted", "合成榜", FileKind.MAIN, "榜单名称", "合成物品数量榜在游戏和网页结果中显示的名称。"),
+            option("metric-label-redstone", "红石大蛇榜", FileKind.MAIN, "榜单名称", "放置电源、传输和机械类红石元件数量榜在游戏和网页结果中显示的名称。"),
+            option("metric-color-food", "#FFAA00", FileKind.MAIN, "榜单颜色", "大胃王榜颜色；格式 #RRGGBB。"),
+            option("metric-color-jumps", "#FF55FF", FileKind.MAIN, "榜单颜色", "跳跃榜颜色；格式 #RRGGBB。"),
+            option("metric-color-mined", "#5555FF", FileKind.MAIN, "榜单颜色", "挖掘榜颜色；默认蓝色，格式 #RRGGBB。"),
+            option("metric-color-placed", "#00AAAA", FileKind.MAIN, "榜单颜色", "放置榜颜色；默认深青色，格式 #RRGGBB。"),
+            option("metric-color-kills", "#FF5555", FileKind.MAIN, "榜单颜色", "击杀榜颜色；格式 #RRGGBB。"),
+            option("metric-color-deaths", "#AA0000", FileKind.MAIN, "榜单颜色", "死亡榜颜色；格式 #RRGGBB。"),
+            option("metric-color-trades", "#55FF55", FileKind.MAIN, "榜单颜色", "交易榜颜色；默认绿色，格式 #RRGGBB。"),
+            option("metric-color-playtime", "#55FFFF", FileKind.MAIN, "榜单颜色", "在线榜颜色；默认青色，格式 #RRGGBB。"),
+            option("metric-color-elytra", "#FF55FF", FileKind.MAIN, "榜单颜色", "飞行榜颜色；格式 #RRGGBB。"),
+            option("metric-color-fishing", "#0000AA", FileKind.MAIN, "榜单颜色", "钓鱼榜颜色；默认深蓝色，格式 #RRGGBB。"),
+            option("metric-color-damage", "#FF5555", FileKind.MAIN, "榜单颜色", "受伤榜颜色；默认红色，格式 #RRGGBB。"),
+            option("metric-color-dropped", "#555555", FileKind.MAIN, "榜单颜色", "丢垃圾榜颜色；格式 #RRGGBB。"),
+            option("metric-color-picked", "#55FF55", FileKind.MAIN, "榜单颜色", "拾荒榜颜色；格式 #RRGGBB。"),
+            option("metric-color-crafted", "#FFAA00", FileKind.MAIN, "榜单颜色", "合成榜颜色；格式 #RRGGBB。"),
+            option("metric-color-redstone", "#FF5555", FileKind.MAIN, "榜单颜色", "红石大蛇榜颜色；格式 #RRGGBB。"),
             option("scoreboard-title-color-enabled", "true", FileKind.MAIN, "客户端计分板", "是否让计分板标题跟随当前榜单颜色；默认 true。"),
             option("scoreboard-live-update-enabled", "true", FileKind.MAIN, "客户端计分板", "玩家行为改变统计时是否即时刷新对应榜单；默认 true。"),
             option("scoreboard-live-update-window-seconds", "30", FileKind.MAIN, "客户端计分板", "高频行为统计窗口秒数；默认 30，范围 1-300。"),
@@ -69,7 +101,8 @@ final class RankBoardConfig {
     final int carouselIntervalSeconds;
     final boolean clientScoreboardShowZero;
     final boolean scoreboardSwitchMessageEnabled;
-    final boolean scoreboardNameColorEnabled;
+    final NameColorMode nameColorMode;
+    final NameColorRenderMode nameColorRenderMode;
     final boolean scoreboardTitleColorEnabled;
     final boolean scoreboardLiveUpdateEnabled;
     final int scoreboardLiveUpdateWindowSeconds;
@@ -94,7 +127,8 @@ final class RankBoardConfig {
         carouselIntervalSeconds = integer(properties, "carousel-interval-seconds", 30, 3, 3600);
         clientScoreboardShowZero = bool(properties, "client-scoreboard-show-zero", false);
         scoreboardSwitchMessageEnabled = bool(properties, "scoreboard-switch-message-enabled", true);
-        scoreboardNameColorEnabled = bool(properties, "scoreboard-name-color-enabled", true);
+        nameColorMode = NameColorMode.parse(properties.getProperty("scoreboard-name-color-enabled", "true"));
+        nameColorRenderMode = NameColorRenderMode.parse(properties.getProperty("player-name-color-render-mode", "legacy"));
         scoreboardTitleColorEnabled = bool(properties, "scoreboard-title-color-enabled", true);
         scoreboardLiveUpdateEnabled = bool(properties, "scoreboard-live-update-enabled", true);
         scoreboardLiveUpdateWindowSeconds = integer(properties, "scoreboard-live-update-window-seconds", 30, 1, 300);
@@ -149,6 +183,18 @@ final class RankBoardConfig {
 
     static String description(String key) {
         return requireOption(key).comment;
+    }
+
+    static String defaultValue(String key) { return requireOption(key).defaultValue; }
+
+    int metricColor(RankBoardMod.Metric metric) {
+        return Integer.parseInt(mainProperties.getProperty("metric-color-" + metric.command,
+                defaultValue("metric-color-" + metric.command)).substring(1), 16);
+    }
+
+    String metricLabel(RankBoardMod.Metric metric) {
+        return mainProperties.getProperty("metric-label-" + metric.command,
+                defaultValue("metric-label-" + metric.command));
     }
 
     static boolean isWebOption(String key) {
@@ -223,6 +269,7 @@ final class RankBoardConfig {
                 && !properties.containsKey("web-icon-request-interval-seconds")) {
             properties.setProperty("web-icon-request-interval-seconds", "3");
         }
+        if (fileKind == FileKind.MAIN) migrateDefaultPreset(properties);
         for (Option option : OPTIONS) {
             if (option.fileKind == fileKind) properties.putIfAbsent(option.key, option.defaultValue);
         }
@@ -237,6 +284,27 @@ final class RankBoardConfig {
             RankBoardMod.LOGGER.info("Migrated legacy RankBoard config {} to {}", legacy, target);
         }
         return properties;
+    }
+
+    private static void migrateDefaultPreset(Properties properties) {
+        int version;
+        try { version = Integer.parseInt(properties.getProperty("rankboard-defaults-version", "1")); }
+        catch (NumberFormatException ignored) { version = 1; }
+        if (version >= 2) return;
+        replaceOldDefault(properties, "metric-label-playtime", "在线时间榜", "在线榜");
+        replaceOldDefault(properties, "metric-label-elytra", "鞘翅飞行榜", "飞行榜");
+        replaceOldDefault(properties, "metric-label-damage", "受伤害榜", "受伤榜");
+        replaceOldDefault(properties, "metric-color-trades", "#55FFFF", "#55FF55");
+        replaceOldDefault(properties, "metric-color-playtime", "#00AAAA", "#55FFFF");
+        replaceOldDefault(properties, "metric-color-damage", "#FFFF55", "#FF5555");
+        replaceOldDefault(properties, "metric-color-placed", "#00AA00", "#00AAAA");
+        replaceOldDefault(properties, "metric-color-mined", "#AAAAAA", "#5555FF");
+        replaceOldDefault(properties, "metric-color-fishing", "#5555FF", "#0000AA");
+        properties.setProperty("rankboard-defaults-version", "2");
+    }
+
+    private static void replaceOldDefault(Properties properties, String key, String oldValue, String newValue) {
+        if (oldValue.equalsIgnoreCase(properties.getProperty(key, oldValue))) properties.setProperty(key, newValue);
     }
 
     private static void loadInto(Path path, Properties target, boolean onlyMissing) throws IOException {
@@ -257,8 +325,8 @@ final class RankBoardConfig {
                 writer.write(READ_LEGACY_CONFIG + "="
                         + properties.getProperty(READ_LEGACY_CONFIG, "true") + "\n");
                 writer.write(fileKind == FileKind.MAIN
-                        ? "# RankBoard 主配置（Minecraft 1.21.1）\n"
-                        : "# RankBoard 网页配置（Minecraft 1.21.1）\n");
+                        ? "# RankBoard 主配置（Minecraft 26.x）\n"
+                        : "# RankBoard 网页配置（Minecraft 26.x）\n");
                 writer.write("# 可手动编辑，也可由 OP 使用 /leaderboard config set <配置项> <值> 修改。\n");
                 writer.write("# 修改前请阅读每项说明；布尔值使用 true 或 false。\n");
                 String previousSection = null;
@@ -299,6 +367,8 @@ final class RankBoardConfig {
 
     private static String normalize(Option option, String rawValue) {
         String value = rawValue.strip();
+        if (option.key.startsWith("metric-color-")) return normalizedColor(value);
+        if (option.key.startsWith("metric-label-")) return normalizedLabel(value);
         return switch (option.key) {
             case "history-files-per-second" -> normalizedInteger(value, 1, 1000);
             case "carousel-interval-seconds" -> normalizedInteger(value, 3, 3600);
@@ -312,7 +382,7 @@ final class RankBoardConfig {
             case "welcome-enabled", "join-menu-enabled", "join-web-hint-enabled",
                     "restore-scoreboard-on-join", "look-up-sneak-menu-enabled", "carousel-enabled",
                     "client-scoreboard-show-zero", "scoreboard-switch-message-enabled",
-                    "scoreboard-name-color-enabled", "scoreboard-title-color-enabled",
+                    "scoreboard-title-color-enabled",
                     "scoreboard-live-update-enabled", "avatar-cache-enabled", "mod-whitelist-enabled" -> normalizedBoolean(value);
             case "help-visibility" -> switch (value.toLowerCase(Locale.ROOT)) {
                 case "all" -> "all";
@@ -326,6 +396,8 @@ final class RankBoardConfig {
                 case "disabled", "disable", "off", "false" -> "disabled";
                 default -> throw new IllegalArgumentException("可用值：ask、enabled、disabled");
             };
+            case "scoreboard-name-color-enabled" -> NameColorMode.parse(value).serialized;
+            case "player-name-color-render-mode" -> NameColorRenderMode.parse(value).serialized;
             case "host", "website-icon" -> {
                 if (value.isEmpty()) throw new IllegalArgumentException(option.key + " 不能为空");
                 yield value;
@@ -342,6 +414,17 @@ final class RankBoardConfig {
             case "false", "off", "no", "0" -> "false";
             default -> throw new IllegalArgumentException("布尔配置仅支持 true/false（也可使用 on/off）");
         };
+    }
+
+    private static String normalizedColor(String value) {
+        if (!value.matches("#[0-9a-fA-F]{6}")) throw new IllegalArgumentException("颜色格式必须为 #RRGGBB");
+        return value.toUpperCase(Locale.ROOT);
+    }
+
+    private static String normalizedLabel(String value) {
+        if (value.isEmpty() || value.length() > 32) throw new IllegalArgumentException("榜单名称长度必须为 1-32 个字符");
+        if (value.chars().anyMatch(Character::isISOControl)) throw new IllegalArgumentException("榜单名称不能包含控制字符");
+        return value;
     }
 
     private static String normalizedInteger(String value, int minimum, int maximum) {
@@ -441,6 +524,37 @@ final class RankBoardConfig {
                 case "op", "ops" -> OP;
                 case "hidden", "off", "none" -> HIDDEN;
                 default -> ALL;
+            };
+        }
+    }
+
+    enum NameColorMode {
+        ENABLED("true"), DISABLED("false"), SCOREBOARD_ONLY("scoreboard-only");
+
+        final String serialized;
+        NameColorMode(String serialized) { this.serialized = serialized; }
+
+        static NameColorMode parse(String value) {
+            return switch (value.strip().toLowerCase(Locale.ROOT)) {
+                case "true", "on", "enabled", "enable" -> ENABLED;
+                case "false", "off", "disabled", "disable" -> DISABLED;
+                case "scoreboard-only", "only-scoreboard" -> SCOREBOARD_ONLY;
+                default -> throw new IllegalArgumentException("可用值：true、false、scoreboard-only");
+            };
+        }
+    }
+
+    enum NameColorRenderMode {
+        LEGACY("legacy"), RGB("rgb");
+
+        final String serialized;
+        NameColorRenderMode(String serialized) { this.serialized = serialized; }
+
+        static NameColorRenderMode parse(String value) {
+            return switch (value.strip().toLowerCase(Locale.ROOT)) {
+                case "legacy" -> LEGACY;
+                case "rgb" -> RGB;
+                default -> throw new IllegalArgumentException("可用值：legacy、rgb");
             };
         }
     }

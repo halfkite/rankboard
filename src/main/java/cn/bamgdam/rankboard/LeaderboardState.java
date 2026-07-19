@@ -30,6 +30,7 @@ public final class LeaderboardState extends PersistentState {
     private boolean onlineOnly;
     private final Set<RankBoardMod.Metric> disabledDisplayMetrics = new HashSet<>();
     private final Set<UUID> nameColorDisabledPlayers = new HashSet<>();
+    private final Set<UUID> lookMenuDisabledPlayers = new HashSet<>();
     private final Map<UUID, BoardPreference> boardPreferences = new HashMap<>();
     private BoardPreference globalBoardPreference;
     private final NavigableMap<LocalDate, Map<UUID, Map<RankBoardMod.Metric, Long>>> dailySnapshots = new TreeMap<>();
@@ -50,6 +51,10 @@ public final class LeaderboardState extends PersistentState {
         }
         for (NbtElement element : NbtCompat.getList(nbt, "nameColorDisabledPlayers", NbtElement.STRING_TYPE)) {
             try { state.nameColorDisabledPlayers.add(UUID.fromString(NbtCompat.asString(element))); }
+            catch (IllegalArgumentException ignored) { }
+        }
+        for (NbtElement element : NbtCompat.getList(nbt, "lookMenuDisabledPlayers", NbtElement.STRING_TYPE)) {
+            try { state.lookMenuDisabledPlayers.add(UUID.fromString(NbtCompat.asString(element))); }
             catch (IllegalArgumentException ignored) { }
         }
         for (NbtElement element : NbtCompat.getList(nbt, "periods", NbtElement.COMPOUND_TYPE)) {
@@ -95,6 +100,9 @@ public final class LeaderboardState extends PersistentState {
         NbtList disabledColors = new NbtList();
         nameColorDisabledPlayers.forEach(uuid -> disabledColors.add(NbtString.of(uuid.toString())));
         nbt.put("nameColorDisabledPlayers", disabledColors);
+        NbtList disabledLookMenus = new NbtList();
+        lookMenuDisabledPlayers.forEach(uuid -> disabledLookMenus.add(NbtString.of(uuid.toString())));
+        nbt.put("lookMenuDisabledPlayers", disabledLookMenus);
         NbtList snapshots = new NbtList();
         dailySnapshots.forEach((date, players) -> {
             NbtCompound snapshot = new NbtCompound();
@@ -192,6 +200,12 @@ public final class LeaderboardState extends PersistentState {
     public boolean isNameColorEnabled(UUID uuid) { return !nameColorDisabledPlayers.contains(uuid); }
     public void setNameColorEnabled(UUID uuid, boolean enabled) {
         boolean changed = enabled ? nameColorDisabledPlayers.remove(uuid) : nameColorDisabledPlayers.add(uuid);
+        if (changed) markDirty();
+    }
+
+    public boolean isLookMenuEnabled(UUID uuid) { return !lookMenuDisabledPlayers.contains(uuid); }
+    public void setLookMenuEnabled(UUID uuid, boolean enabled) {
+        boolean changed = enabled ? lookMenuDisabledPlayers.remove(uuid) : lookMenuDisabledPlayers.add(uuid);
         if (changed) markDirty();
     }
 

@@ -40,6 +40,7 @@ final class BoardService {
     private BoardService() { }
 
     static void disconnect(ServerPlayerEntity player) {
+        PlayerNameColors.disconnect(player);
         SELECTIONS.remove(player.getUuid());
         OVERVIEW_SELECTIONS.remove(player.getUuid());
         CLIENT_OBJECTIVES.remove(player.getUuid());
@@ -75,7 +76,7 @@ final class BoardService {
 
     static int enable(ServerCommandSource source, ServerPlayerEntity player, RankBoardMod.Period period, RankBoardMod.Metric metric) {
         if (!LeaderboardState.get(PlayerCompat.server(player)).isMetricDisplayEnabled(metric)) {
-            source.sendError(Text.literal(metric.label + " 当前已被 OP 禁止显示。"));
+            source.sendError(Text.literal(metric.label() + " 当前已被 OP 禁止显示。"));
             return 0;
         }
         try {
@@ -85,6 +86,7 @@ final class BoardService {
             LeaderboardState.get(PlayerCompat.server(player)).setBoardPreference(
                     player.getUuid(), period, metric, true, false);
             sendPrivate(player, period, metric);
+            PlayerNameColors.refresh(player);
             if (RankBoardConfig.get().scoreboardSwitchMessageEnabled) {
                 player.sendMessage(Text.literal(
                         "已显示个人原版计分板；输入 /leaderboard display off 可关闭。"), false);
@@ -115,6 +117,7 @@ final class BoardService {
         LeaderboardState.get(PlayerCompat.server(player)).disableBoard(player.getUuid());
         removePrivateObjective(player);
         player.networkHandler.sendPacket(new ScoreboardDisplayS2CPacket(ScoreboardDisplaySlot.SIDEBAR, null));
+        PlayerNameColors.refresh(player);
         source.sendFeedback(() -> Text.literal(player == source.getEntity()
                 ? "已关闭个人计分板。" : "已关闭 " + player.getName().getString() + " 的个人计分板。"), false);
         return 1;
@@ -131,6 +134,7 @@ final class BoardService {
             catch (RuntimeException exception) {
                 RankBoardMod.LOGGER.warn("Could not restore overview for {}", player.getName().getString(), exception);
             }
+            PlayerNameColors.refresh(player);
             return;
         }
         if (!state.isMetricDisplayEnabled(preference.metric())) return;
@@ -141,6 +145,7 @@ final class BoardService {
         catch (RuntimeException exception) {
             RankBoardMod.LOGGER.warn("Could not restore scoreboard for {}", player.getName().getString(), exception);
         }
+        PlayerNameColors.refresh(player);
     }
 
     static void restoreGlobal(MinecraftServer server) {
@@ -169,6 +174,7 @@ final class BoardService {
             state.setBoardPreference(player.getUuid(), selection.period, selection.metric, true, enabled);
             if (enabled) scheduleCarousel(player.getUuid()); else NEXT_CAROUSEL_AT.remove(player.getUuid());
             sendPrivate(player, selection.period, selection.metric);
+            PlayerNameColors.refresh(player);
             int seconds = RankBoardConfig.get().carouselIntervalSeconds;
             source.sendFeedback(() -> Text.literal(enabled
                     ? "已开启榜单轮播，每 " + seconds + " 秒自动切换。"
@@ -212,6 +218,7 @@ final class BoardService {
             catch (RuntimeException exception) {
                 RankBoardMod.LOGGER.warn("Could not rotate scoreboard for {}", player.getName().getString(), exception);
             }
+            PlayerNameColors.refresh(player);
         }
     }
 
@@ -303,6 +310,7 @@ final class BoardService {
             OVERVIEW_SELECTIONS.put(player.getUuid(), period);
             LeaderboardState.get(PlayerCompat.server(player)).setOverviewPreference(player.getUuid(), period, true);
             sendOverview(player, period);
+            PlayerNameColors.refresh(player);
             return 1;
         } catch (com.mojang.brigadier.exceptions.CommandSyntaxException exception) {
             source.sendError(Text.literal("该命令只能由玩家执行。"));
@@ -336,7 +344,7 @@ final class BoardService {
             if (!RankBoardConfig.get().clientScoreboardShowZero && value == 0L) continue;
             int score = scoreboardValue(metric, value);
             player.networkHandler.sendPacket(new ScoreboardScoreUpdateS2CPacket(
-                    metric.label, name, score, Optional.empty(), scoreboardFormat(metric, score)));
+                    metric.label(), name, score, Optional.empty(), scoreboardFormat(metric, score)));
         }
         player.networkHandler.sendPacket(new ScoreboardDisplayS2CPacket(ScoreboardDisplaySlot.SIDEBAR, objective));
     }
@@ -361,9 +369,9 @@ final class BoardService {
             Optional<Text> displayName = Optional.empty();
             ServerPlayerEntity entryPlayer = onlinePlayers.get(entry.name());
             Selection entrySelection = entryPlayer == null ? null : SELECTIONS.get(entryPlayer.getUuid());
-            if (RankBoardConfig.get().scoreboardNameColorEnabled && entryPlayer != null && entrySelection != null
-                    && LeaderboardState.get(PlayerCompat.server(player)).isNameColorEnabled(entryPlayer.getUuid())) {
-                displayName = Optional.of(Text.literal(entry.name()).formatted(entrySelection.metric.nameColor));
+            if (RankBoardConfig.get().nameColorMode != RankBoardConfig.NameColorMode.DISABLED
+                    && entryPlayer != null && entrySelection != null) {
+                displayName = Optional.of(RankBoardColors.text(entry.name(), entrySelection.metric));
             }
             player.networkHandler.sendPacket(new ScoreboardScoreUpdateS2CPacket(
                     entry.name(), objective.getName(), value, displayName, scoreboardFormat(metric, value)));
@@ -374,7 +382,7 @@ final class BoardService {
     static int writeVanilla(ServerCommandSource source, RankBoardMod.Period period, RankBoardMod.Metric metric) {
         try {
             if (!LeaderboardState.get(source.getServer()).isMetricDisplayEnabled(metric)) {
-                source.sendError(Text.literal(metric.label + " 当前已被 OP 禁止显示。"));
+                source.sendError(Text.literal(metric.label() + " 当前已被 OP 禁止显示。"));
                 return 0;
             }
             Scoreboard scoreboard = source.getServer().getScoreboard();
@@ -484,8 +492,10 @@ final class BoardService {
         Scoreboard scoreboard = server.getScoreboard();
         ScoreboardObjective objective = scoreboard.getNullableObjective(name);
         String unit = metric == RankBoardMod.Metric.PLAY_TIME ? "（h）" : "";
-        Text title = Text.literal(period.label + " " + metric.label + unit);
-        if (RankBoardConfig.get().scoreboardTitleColorEnabled) title = title.copy().formatted(metric.nameColor);
+        Text title = Text.literal(period.label + " " + metric.label() + unit);
+        if (RankBoardConfig.get().scoreboardTitleColorEnabled) {
+            title = title.copy().styled(style -> style.withColor(RankBoardColors.renderedRgb(metric)));
+        }
         if (objective == null) {
             objective = scoreboard.addObjective(name, ScoreboardCriterion.DUMMY, title,
                     ScoreboardCriterion.RenderType.INTEGER, false, null);
@@ -539,6 +549,7 @@ final class BoardService {
         LeaderboardState.get(PlayerCompat.server(player)).disableBoard(player.getUuid());
         removePrivateObjective(player);
         player.networkHandler.sendPacket(new ScoreboardDisplayS2CPacket(ScoreboardDisplaySlot.SIDEBAR, null));
+        PlayerNameColors.refresh(player);
         player.sendMessage(Text.literal("当前榜单显示已被 OP 禁用，个人计分板已关闭。").formatted(Formatting.GRAY), false);
     }
     private static String objectiveName(RankBoardMod.Period period, RankBoardMod.Metric metric, boolean personal) {
@@ -548,6 +559,10 @@ final class BoardService {
     private static boolean isRankBoardObjective(ScoreboardObjective objective) {
         String name = objective.getName();
         return name.startsWith("rbp_") || name.startsWith("rbg_") || name.startsWith("rbo_");
+    }
+    static RankBoardMod.Metric selectedMetric(UUID uuid) {
+        Selection selection = SELECTIONS.get(uuid);
+        return selection == null ? null : selection.metric;
     }
     private static void scheduleCarousel(UUID uuid) { NEXT_CAROUSEL_AT.put(uuid, carouselDeadline()); }
     private static long carouselDeadline() {

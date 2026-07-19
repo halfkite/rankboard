@@ -1,6 +1,7 @@
 package cn.bamgdam.rankboard;
 
 import com.mojang.authlib.GameProfile;
+import com.mojang.brigadier.LiteralMessage;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -43,6 +44,22 @@ public final class RankBoardMod implements ModInitializer {
     static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
     private static final int REFRESH_INTERVAL_TICKS = 600;
     private static final Set<UUID> LOOK_MENU_HELD = new HashSet<>();
+    private static final Set<String> REDSTONE_COMPONENTS = Set.of(
+            "redstone", "redstone_torch", "repeater", "comparator", "observer", "piston", "sticky_piston",
+            "dispenser", "dropper", "hopper", "lever", "tripwire_hook", "target", "daylight_detector",
+            "note_block", "redstone_block", "sculk_sensor", "calibrated_sculk_sensor", "lightning_rod",
+            "trapped_chest", "powered_rail", "detector_rail", "activator_rail", "rail", "lectern", "jukebox", "bell",
+            "redstone_lamp", "tnt", "big_dripleaf", "crafter", "command_block", "chain_command_block",
+            "repeating_command_block");
+    private static final List<ColorPreset> COLOR_PRESETS = List.of(
+            new ColorPreset("black", "黑色", Formatting.BLACK), new ColorPreset("dark_blue", "深蓝色", Formatting.DARK_BLUE),
+            new ColorPreset("dark_green", "深绿色", Formatting.DARK_GREEN), new ColorPreset("dark_aqua", "深青色", Formatting.DARK_AQUA),
+            new ColorPreset("dark_red", "深红色", Formatting.DARK_RED), new ColorPreset("dark_purple", "深紫色", Formatting.DARK_PURPLE),
+            new ColorPreset("gold", "金色", Formatting.GOLD), new ColorPreset("gray", "灰色", Formatting.GRAY),
+            new ColorPreset("dark_gray", "深灰色", Formatting.DARK_GRAY), new ColorPreset("blue", "蓝色", Formatting.BLUE),
+            new ColorPreset("green", "绿色", Formatting.GREEN), new ColorPreset("aqua", "青色", Formatting.AQUA),
+            new ColorPreset("red", "红色", Formatting.RED), new ColorPreset("light_purple", "粉紫色", Formatting.LIGHT_PURPLE),
+            new ColorPreset("yellow", "黄色", Formatting.YELLOW), new ColorPreset("white", "白色", Formatting.WHITE));
     private int ticks;
 
     @Override
@@ -58,6 +75,7 @@ public final class RankBoardMod implements ModInitializer {
             WebDashboard.start(server);
         });
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+            PlayerNameColors.clear(server);
             BoardService.clearSessions();
             WebDashboard.stop();
             StatReader.stopWarmup();
@@ -97,8 +115,17 @@ public final class RankBoardMod implements ModInitializer {
                 .then(CommandManager.literal("player").executes(context -> helpGrouped(context.getSource(), "player")))
                 .then(CommandManager.literal("scoreboard").executes(context -> helpGrouped(context.getSource(), "scoreboard")))
                 .then(CommandManager.literal("web").executes(context -> helpGrouped(context.getSource(), "web")))
+                .then(CommandManager.literal("config").requires(source -> CommandPermissionCompat.has(source, 2))
+                        .executes(context -> helpGrouped(context.getSource(), "config"))
+                        .then(CommandManager.literal("general").executes(context -> helpGrouped(context.getSource(), "config-general")))
+                        .then(CommandManager.literal("scoreboard").executes(context -> helpGrouped(context.getSource(), "config-scoreboard")))
+                        .then(CommandManager.literal("web").executes(context -> helpGrouped(context.getSource(), "config-web"))))
                 .then(CommandManager.literal("admin").requires(source -> CommandPermissionCompat.has(source, 2))
-                        .executes(context -> helpGrouped(context.getSource(), "admin"))));
+                        .executes(context -> helpGrouped(context.getSource(), "admin"))
+                        .then(CommandManager.literal("players").executes(context -> helpGrouped(context.getSource(), "admin-players")))
+                        .then(CommandManager.literal("scoreboard").executes(context -> helpGrouped(context.getSource(), "admin-scoreboard")))
+                        .then(CommandManager.literal("web").executes(context -> helpGrouped(context.getSource(), "admin-web")))
+                        .then(CommandManager.literal("config").executes(context -> helpGrouped(context.getSource(), "admin-config")))));
         root.then(CommandManager.literal("mine")
                 .executes(context -> showMyScores(context.getSource(), -1, "总计"))
                 .then(CommandManager.literal("all").executes(context -> showMyScores(context.getSource(), -1, "总计")))
@@ -117,12 +144,23 @@ public final class RankBoardMod implements ModInitializer {
                                 .executes(context -> BoardService.disable(context.getSource(),
                                         EntityArgumentType.getPlayer(context, "player")))))
                 .then(buildSelectionCommands(false)));
-        root.then(CommandManager.literal("namecolor")
-                .then(CommandManager.literal("true").executes(context -> setNameColor(context.getSource(), true)))
-                .then(CommandManager.literal("false").executes(context -> setNameColor(context.getSource(), false)))
-                .then(CommandManager.literal("on").executes(context -> setNameColor(context.getSource(), true)))
-                .then(CommandManager.literal("off").executes(context -> setNameColor(context.getSource(), false)))
+        root.then(CommandManager.literal("namecolor").requires(source -> CommandPermissionCompat.has(source, 2))
+                .then(CommandManager.literal("true").executes(context -> setNameColor(context.getSource(), "true")))
+                .then(CommandManager.literal("false").executes(context -> setNameColor(context.getSource(), "false")))
+                .then(CommandManager.literal("scoreboard-only").executes(context -> setNameColor(context.getSource(), "scoreboard-only")))
+                .then(CommandManager.literal("on").executes(context -> setNameColor(context.getSource(), "true")))
+                .then(CommandManager.literal("off").executes(context -> setNameColor(context.getSource(), "false")))
                 .then(CommandManager.literal("status").executes(context -> nameColorStatus(context.getSource()))));
+        root.then(buildColorCommands());
+        root.then(buildLabelCommands());
+        root.then(CommandManager.literal("lookmenu")
+                .then(CommandManager.literal("true").executes(context -> setLookMenu(context.getSource(), true)))
+                .then(CommandManager.literal("false").executes(context -> setLookMenu(context.getSource(), false)))
+                .then(CommandManager.literal("status").executes(context -> lookMenuStatus(context.getSource())))
+                .then(CommandManager.literal("global").requires(source -> CommandPermissionCompat.has(source, 2))
+                        .then(CommandManager.literal("true").executes(context -> setGlobalLookMenu(context.getSource(), true)))
+                        .then(CommandManager.literal("false").executes(context -> setGlobalLookMenu(context.getSource(), false)))
+                        .then(CommandManager.literal("status").executes(context -> globalLookMenuStatus(context.getSource())))));
         LiteralArgumentBuilder<ServerCommandSource> displayFilter = CommandManager.literal("displayfilter")
                 .requires(source -> CommandPermissionCompat.has(source, 2));
         for (Metric metric : Metric.values()) {
@@ -242,6 +280,43 @@ public final class RankBoardMod implements ModInitializer {
         return periods;
     }
 
+    private LiteralArgumentBuilder<ServerCommandSource> buildColorCommands() {
+        LiteralArgumentBuilder<ServerCommandSource> root = CommandManager.literal("color")
+                .requires(source -> CommandPermissionCompat.has(source, 2))
+                .then(CommandManager.literal("list").executes(context -> listMetricColors(context.getSource())));
+        LiteralArgumentBuilder<ServerCommandSource> reset = CommandManager.literal("reset")
+                .then(CommandManager.literal("all").executes(context -> resetAllMetricColors(context.getSource())));
+        for (Metric metric : Metric.values()) {
+            root.then(CommandManager.literal(metric.command)
+                    .executes(context -> showColorPresets(context.getSource(), metric))
+                    .then(CommandManager.argument("value", StringArgumentType.word())
+                            .suggests((context, builder) -> suggestColorPresets(builder))
+                            .executes(context -> setMetricColor(context.getSource(), metric,
+                                    StringArgumentType.getString(context, "value")))));
+            reset.then(CommandManager.literal(metric.command)
+                    .executes(context -> resetMetricColor(context.getSource(), metric)));
+        }
+        return root.then(reset);
+    }
+
+    private LiteralArgumentBuilder<ServerCommandSource> buildLabelCommands() {
+        LiteralArgumentBuilder<ServerCommandSource> root = CommandManager.literal("label")
+                .requires(source -> CommandPermissionCompat.has(source, 2))
+                .then(CommandManager.literal("list").executes(context -> listMetricLabels(context.getSource())));
+        LiteralArgumentBuilder<ServerCommandSource> reset = CommandManager.literal("reset")
+                .then(CommandManager.literal("all").executes(context -> resetAllMetricLabels(context.getSource())));
+        for (Metric metric : Metric.values()) {
+            root.then(CommandManager.literal(metric.command)
+                    .executes(context -> showMetricLabel(context.getSource(), metric))
+                    .then(CommandManager.argument("name", StringArgumentType.greedyString())
+                            .executes(context -> setMetricLabel(context.getSource(), metric,
+                                    StringArgumentType.getString(context, "name")))));
+            reset.then(CommandManager.literal(metric.command)
+                    .executes(context -> resetMetricLabel(context.getSource(), metric)));
+        }
+        return root.then(reset);
+    }
+
     private int helpGrouped(ServerCommandSource source, String group) {
         boolean op = CommandPermissionCompat.has(source, 2);
         if (group.equals("menu")) {
@@ -265,7 +340,7 @@ public final class RankBoardMod implements ModInitializer {
                 helpCommand(source, "/leaderboard mine <all|day|week|month>", "/leaderboard mine ", "查询指定周期的个人统计");
                 helpCommand(source, "/leaderboard <周期> <榜单> [数量]", "/leaderboard all playtime ", "查看排行榜");
                 helpCommand(source, "/leaderboard carousel true|false|status", "/leaderboard carousel ", "控制榜单轮播");
-                helpCommand(source, "/leaderboard namecolor true|false|status", "/leaderboard namecolor ", "开关名字颜色");
+                helpCommand(source, "/leaderboard lookmenu true|false|status", "/leaderboard lookmenu ", "关闭或开启自己的抬头蹲起菜单");
             }
             case "scoreboard" -> {
                 helpCommand(source, "/leaderboard display show <周期> <榜单>", "/leaderboard display show ", "显示个人单榜计分板");
@@ -288,61 +363,125 @@ public final class RankBoardMod implements ModInitializer {
             }
             case "admin" -> {
                 if (!op) return 0;
+                Text modules = clickable("[玩家与筛选]", Formatting.AQUA,
+                                "/leaderboard help admin players", "白名单与玩家筛选")
+                        .copy().append(Text.literal(" "))
+                        .append(clickable("[计分板与颜色]", Formatting.YELLOW,
+                                "/leaderboard help admin scoreboard", "计分板、榜单显示与名字颜色"))
+                        .append(Text.literal(" "))
+                        .append(clickable("[网页与缓存]", Formatting.GREEN,
+                                "/leaderboard help admin web", "网页、限流与缓存"))
+                        .append(Text.literal(" "))
+                        .append(clickable("[配置管理]", Formatting.LIGHT_PURPLE,
+                                "/leaderboard help admin config", "配置命令与完整配置说明"));
+                source.sendFeedback(() -> modules, false);
+            }
+            case "admin-players" -> {
+                if (!op) return 0;
                 helpCommand(source, "/leaderboard whitelist <true|false|status>", "/leaderboard whitelist ", "控制服务器白名单筛选");
                 helpCommand(source, "/leaderboard modwhitelist <add|remove|list|reload>", "/leaderboard modwhitelist ", "管理模组自带白名单");
+                helpCommand(source, "/leaderboard botfilter <true|false|status>", "/leaderboard botfilter ", "筛选 bot_ 前缀玩家；立即生效");
+                helpCommand(source, "/leaderboard customfilter <true|false|status>", "/leaderboard customfilter ", "筛选无法识别身份的历史玩家；立即生效");
+                helpCommand(source, "/leaderboard onlinefilter <true|false|status>", "/leaderboard onlinefilter ", "只显示在线玩家；立即生效");
+                helpCommand(source, "/leaderboard lookup <uuid|whitelist>", "/leaderboard lookup ", "查询 Mojang 玩家名或批量补全白名单名称");
+            }
+            case "admin-scoreboard" -> {
+                if (!op) return 0;
                 helpCommand(source, "/leaderboard displayfilter <榜单> <true|false|status>", "/leaderboard displayfilter ", "管理榜单显示");
+                helpCommand(source, "/leaderboard scoreboard show <周期> <榜单>", "/leaderboard scoreboard show ", "显示全服共享原版侧边栏；不会改变玩家名字颜色");
+                helpCommand(source, "/leaderboard scoreboard clear", "/leaderboard scoreboard clear", "关闭 RankBoard 全服共享侧边栏");
+                helpCommand(source, "/leaderboard scoreboard cleanup", "/leaderboard scoreboard cleanup", "检测并关闭当前其他模组计分板显示槽");
                 helpCommand(source, "/leaderboard scoreboard blocking <true|false|status>",
                         "/leaderboard scoreboard blocking ", "屏蔽其他模组计分板");
-                helpCommand(source, "/leaderboard cache <status|reload>", "/leaderboard cache ", "管理统计缓存");
-                helpCommand(source, "/leaderboard ratelimit clear", "/leaderboard ratelimit clear", "清除全部限流记录");
+                helpCommand(source, "/leaderboard namecolor <true|false|scoreboard-only|status>", "/leaderboard namecolor ",
+                        "设置全服名字颜色：全部位置、全部关闭或仅排行榜；立即生效");
+                helpCommand(source, "/leaderboard color list", "/leaderboard color list", "列出 11 个榜单的当前颜色");
+                helpCommand(source, "/leaderboard color <榜单> [颜色名|#RRGGBB]", "/leaderboard color ", "不填颜色时打开英中双语 16 色预选；颜色名支持 Tab 补全；立即生效");
+                helpCommand(source, "/leaderboard color reset <榜单|all>", "/leaderboard color reset ", "恢复单个或全部榜单默认颜色");
+                helpCommand(source, "/leaderboard label <榜单> <名称>", "/leaderboard label ", "自定义榜单显示名称；支持中文、英文和空格；立即生效");
+                helpCommand(source, "/leaderboard label list|reset <榜单|all>", "/leaderboard label ", "查看或恢复榜单显示名称");
+                helpCommand(source, "/leaderboard lookmenu global <true|false|status>", "/leaderboard lookmenu global ", "OP 控制全服抬头蹲起菜单");
             }
-        }
-        return 1;
-    }
-
-    private int help(ServerCommandSource source) {
-        boolean op = CommandPermissionCompat.has(source, 2);
-        source.sendFeedback(() -> Text.literal("RankBoard 排行榜帮助").formatted(Formatting.GOLD), false);
-        helpCommand(source, "/leaderboard", "/leaderboard", "打开可点击菜单");
-        helpCommand(source, "/leaderboard mine <all|day|week|month>", "/leaderboard mine ", "查看自己的全部分数");
-        helpCommand(source, "/leaderboard display show <周期> <榜单>", "/leaderboard display show ", "显示个人原版侧边栏");
-        helpCommand(source, "/leaderboard display off", "/leaderboard display off", "关闭个人侧边栏");
-        helpCommand(source, "/leaderboard carousel on|off|status", "/leaderboard carousel ", "控制榜单轮播");
-        helpCommand(source, "/leaderboard namecolor on|off|status", "/leaderboard namecolor ", "开关自己的榜单名字颜色");
-        helpCommand(source, "/leaderboard <周期> <榜单> [数量]", "/leaderboard all playtime ", "在聊天栏查看排名");
-        String help = "抬头并按住 Shift：打开 /leaderboard 菜单\n"
-                + "网页默认地址：http://服务器地址:8765/\n"
-                + "主配置：config/rankboard/rankboard.properties\n"
-                + "网页配置：config/rankboard/rankboard-web.properties\n"
-                + "可配置 host、port、server-name、website-icon。\n"
-                + "个人侧边栏零分玩家：client-scoreboard-show-zero，默认 false。\n"
-                + "切换榜单提示：scoreboard-switch-message-enabled，默认 true。\n"
-                + "榜单名字颜色：scoreboard-name-color-enabled，默认 true；可通过上方名字颜色指令控制。\n"
-                + "计分板标题颜色：scoreboard-title-color-enabled，默认 true，独立于玩家名字颜色。\n"
-                + "周期：daily 每日，weekly 每周，monthly 每月，yearly 每年，all 总计\n"
-                + "榜单：food 食物，jumps 跳跃，mined 挖掘，placed 放置，kills 击杀，deaths 死亡，"
-                + "trades 交易，playtime 在线，elytra 鞘翅，fishing 钓鱼，damage 受伤";
-        source.sendFeedback(() -> Text.literal(help).formatted(Formatting.GRAY), false);
-        if (op) {
-            helpCommand(source, "/leaderboard config list|get|set|reload", "/leaderboard config ", "查询、修改或重载配置");
-            helpCommand(source, "/leaderboard config set welcome-enabled false", "/leaderboard config set welcome-enabled false", "关闭欢迎语");
-            helpCommand(source, "/leaderboard config set welcome-name <名称|auto>", "/leaderboard config set welcome-name ", "修改欢迎语名称");
-            helpCommand(source, "/leaderboard config set web-data-requests-per-second <次数>", "/leaderboard config set web-data-requests-per-second ", "修改网页数据基础限额");
-            helpCommand(source, "/leaderboard config set web-icon-request-interval-seconds <秒>", "/leaderboard config set web-icon-request-interval-seconds ", "修改图片基础请求间隔");
-            helpCommand(source, "/leaderboard config set web-ranking-refresh-interval-seconds <秒>", "/leaderboard config set web-ranking-refresh-interval-seconds ", "修改网页整体刷新间隔");
-            helpCommand(source, "/leaderboard config set scoreboard-live-update-threshold <次数>", "/leaderboard config set scoreboard-live-update-threshold ", "修改客户端即时刷新高频阈值");
-            helpCommand(source, "/leaderboard config set scoreboard-live-update-throttle-seconds <秒>", "/leaderboard config set scoreboard-live-update-throttle-seconds ", "修改高频榜单刷新间隔");
-            helpCommand(source, "/leaderboard config set scoreboard-name-color-enabled <true|false>", "/leaderboard config set scoreboard-name-color-enabled ", "全局开关玩家名字颜色");
-            helpCommand(source, "/leaderboard config set scoreboard-title-color-enabled <true|false>", "/leaderboard config set scoreboard-title-color-enabled ", "独立开关计分板标题颜色");
-            helpCommand(source, "/leaderboard ratelimit clear", "/leaderboard ratelimit clear", "清除全部网页限流和累计冷却");
-            helpCommand(source, "/leaderboard displayfilter <榜单> <enable|disable|status>", "/leaderboard displayfilter ", "管理单个榜单是否可显示");
-            helpCommand(source, "/leaderboard scoreboard <show|clear>", "/leaderboard scoreboard ", "管理全服原版侧边栏");
-            helpCommand(source, "/leaderboard whitelist <on|off|status>", "/leaderboard whitelist ", "控制白名单玩家筛选");
-            helpCommand(source, "/leaderboard botfilter <on|off|status>", "/leaderboard botfilter ", "控制 bot 玩家筛选");
-            helpCommand(source, "/leaderboard customfilter <on|off|status>", "/leaderboard customfilter ", "控制无法识别身份玩家筛选");
-            helpCommand(source, "/leaderboard onlinefilter <on|off|status>", "/leaderboard onlinefilter ", "控制仅在线玩家筛选");
-            helpCommand(source, "/leaderboard lookup <uuid|whitelist>", "/leaderboard lookup ", "查询 Mojang 玩家名称");
-            helpCommand(source, "/leaderboard cache <status|reload>", "/leaderboard cache ", "查看或重载历史统计缓存");
+            case "admin-web" -> {
+                if (!op) return 0;
+                source.sendFeedback(() -> websiteButton(source), false);
+                helpCommand(source, "/leaderboard config set web-public-address <地址|auto>",
+                        "/leaderboard config set web-public-address ", "设置网站按钮地址；重启网页服务后仍保留");
+                helpCommand(source, "/leaderboard ratelimit clear", "/leaderboard ratelimit clear", "立即清除全部网页限流记录");
+                helpCommand(source, "/leaderboard cache <status|reload>", "/leaderboard cache ", "查看或重载历史统计缓存");
+                helpCommand(source, "/leaderboard config set avatar-cache-enabled <true|false>",
+                        "/leaderboard config set avatar-cache-enabled ", "开关玩家头像缓存；重新进服时生效");
+            }
+            case "admin-config" -> {
+                if (!op) return 0;
+                helpCommand(source, "/leaderboard config list", "/leaderboard config list", "列出全部配置、当前值和所属文件");
+                helpCommand(source, "/leaderboard config get <配置项>", "/leaderboard config get ", "查看配置当前值、用途与生效方式");
+                helpCommand(source, "/leaderboard config set <配置项> <值>", "/leaderboard config set ", "修改并保存配置；网页项会重启网页服务");
+                helpCommand(source, "/leaderboard config reload", "/leaderboard config reload", "重新读取主配置和网页配置并立即应用");
+                source.sendFeedback(() -> clickable("[打开完整配置说明]", Formatting.LIGHT_PURPLE,
+                        "/leaderboard help config", "进入通用、计分板、网页三个配置模块"), false);
+            }
+            case "config" -> {
+                if (!op) return 0;
+                Text modules = clickable("[通用与进服]", Formatting.GOLD,
+                                "/leaderboard help config general", "欢迎语、菜单、筛选、头像与帮助配置")
+                        .copy().append(Text.literal(" "))
+                        .append(clickable("[计分板与缓存]", Formatting.YELLOW,
+                                "/leaderboard help config scoreboard", "计分板、轮播、刷新与缓存配置"))
+                        .append(Text.literal(" "))
+                        .append(clickable("[网页与限流]", Formatting.AQUA,
+                                "/leaderboard help config web", "网页监听、显示、刷新与限流配置"));
+                source.sendFeedback(() -> modules, false);
+                helpCommand(source, "/leaderboard config list", "/leaderboard config list", "列出所有配置当前值");
+                helpCommand(source, "/leaderboard config get <配置项>", "/leaderboard config get ", "查看单项当前值和用途");
+                helpCommand(source, "/leaderboard config reload", "/leaderboard config reload", "重新读取配置并重启网页服务");
+                helpCommand(source, "/leaderboard cache reload", "/leaderboard cache reload", "重新扫描历史统计并应用缓存相关修改");
+            }
+            case "config-general" -> {
+                if (!op) return 0;
+                configHelpHeader(source);
+                configHelp(source, "welcome-enabled");
+                configHelp(source, "welcome-name");
+                configHelp(source, "join-menu-enabled");
+                configHelp(source, "join-web-hint-enabled");
+                configHelp(source, "web-public-address");
+                configHelp(source, "help-visibility");
+                configHelp(source, "mod-whitelist-enabled");
+                configHelp(source, "avatar-cache-enabled");
+                configHelp(source, "avatar-cache-days");
+            }
+            case "config-scoreboard" -> {
+                if (!op) return 0;
+                configHelpHeader(source);
+                configHelp(source, "foreign-scoreboard-blocking-mode");
+                configHelp(source, "restore-scoreboard-on-join");
+                configHelp(source, "look-up-sneak-menu-enabled");
+                configHelp(source, "carousel-enabled");
+                configHelp(source, "carousel-interval-seconds");
+                configHelp(source, "client-scoreboard-show-zero");
+                configHelp(source, "scoreboard-switch-message-enabled");
+                configHelp(source, "scoreboard-name-color-enabled");
+                configHelp(source, "player-name-color-render-mode");
+                for (Metric metric : Metric.values()) configHelp(source, "metric-label-" + metric.command);
+                for (Metric metric : Metric.values()) configHelp(source, "metric-color-" + metric.command);
+                configHelp(source, "scoreboard-title-color-enabled");
+                configHelp(source, "scoreboard-live-update-enabled");
+                configHelp(source, "scoreboard-live-update-window-seconds");
+                configHelp(source, "scoreboard-live-update-threshold");
+                configHelp(source, "scoreboard-live-update-throttle-seconds");
+                configHelp(source, "history-files-per-second");
+            }
+            case "config-web" -> {
+                if (!op) return 0;
+                configHelpHeader(source);
+                configHelp(source, "host");
+                configHelp(source, "port");
+                configHelp(source, "server-name");
+                configHelp(source, "website-icon");
+                configHelp(source, "web-data-requests-per-second");
+                configHelp(source, "web-icon-request-interval-seconds");
+                configHelp(source, "web-ranking-refresh-interval-seconds");
+            }
         }
         return 1;
     }
@@ -353,10 +492,36 @@ public final class RankBoardMod implements ModInitializer {
         source.sendFeedback(() -> line, false);
     }
 
+    private static void configHelpHeader(ServerCommandSource source) {
+        source.sendFeedback(() -> clickable("[返回配置模块]", Formatting.GRAY,
+                "/leaderboard help config", "返回配置说明分组"), false);
+    }
+
+    private static void configHelp(ServerCommandSource source, String key) {
+        String effect = switch (key) {
+            case "history-files-per-second", "mod-whitelist-enabled" -> "；修改后执行 /leaderboard cache reload";
+            case "host", "port", "server-name", "website-icon", "web-data-requests-per-second",
+                    "web-icon-request-interval-seconds", "web-ranking-refresh-interval-seconds" ->
+                    "；修改后执行 /leaderboard config reload";
+            default -> "；写入后立即生效";
+        };
+        helpCommand(source, "/leaderboard config set " + key + " <值>",
+                "/leaderboard config set " + key + " ", RankBoardConfig.description(key) + effect);
+    }
+
     private int menu(ServerCommandSource source) {
         Text header = clickable("[查询我的分数]", Formatting.GOLD, "/leaderboard mine all", "查看自己的全部统计分数")
                 .copy().append(Text.literal(" "))
                 .append(clickable("[关闭]", Formatting.RED, "/leaderboard display off", "关闭自己的客户端计分板"));
+        try {
+            boolean enabled = LeaderboardState.get(source.getServer()).isLookMenuEnabled(source.getEntity() == null
+                    ? null : source.getEntity().getUuid());
+            header = header.copy().append(Text.literal(" ")).append(clickable(
+                    enabled ? "[关闭抬头蹲起]" : "[开启抬头蹲起]",
+                    enabled ? Formatting.RED : Formatting.GREEN,
+                    "/leaderboard lookmenu " + !enabled,
+                    enabled ? "关闭自己的抬头+蹲起打开菜单" : "开启自己的抬头+蹲起打开菜单"));
+        } catch (RuntimeException ignored) { }
         if (RankBoardConfig.get().carouselEnabled) {
             header = header.copy().append(Text.literal(" "))
                     .append(clickable("[轮播]", Formatting.AQUA, "/leaderboard carousel on", "自动轮播当前周期的榜单"));
@@ -372,9 +537,9 @@ public final class RankBoardMod implements ModInitializer {
         int visible = 0;
         for (Metric metric : Metric.values()) {
             if (!LeaderboardState.get(source.getServer()).isMetricDisplayEnabled(metric)) continue;
-            Text button = clickable("[" + metric.label + "]", metric.nameColor,
+            Text button = clickable("[" + metric.label() + "]", metric,
                     "/leaderboard display show all " + metric.command,
-                    "点击显示总计 " + metric.label + " 侧边栏");
+                    "点击显示总计 " + metric.label() + " 侧边栏");
             if (visible > 0 && visible % 4 == 0) {
                 Text completed = line;
                 source.sendFeedback(() -> completed, false);
@@ -408,7 +573,7 @@ public final class RankBoardMod implements ModInitializer {
                 else value = state.range(source.getServer(), today.minusDays(days - 1L), today, metric)
                         .values().getOrDefault(player.getUuid(), 0L);
                 long score = value;
-                source.sendFeedback(() -> Text.literal(metric.label + "  ").formatted(metric.nameColor)
+                source.sendFeedback(() -> RankBoardColors.text(metric.label() + "  ", metric)
                         .append(Text.literal(format(metric, score)).formatted(Formatting.AQUA)), false);
             }
             Text periods = clickable("[总计]", Formatting.GOLD, "/leaderboard mine all", "查看累计分数")
@@ -463,6 +628,9 @@ public final class RankBoardMod implements ModInitializer {
             boolean webOption = RankBoardConfig.isWebOption(key);
             String normalized = RankBoardConfig.set(source.getServer(), key, value);
             if (key.equals("history-files-per-second")) StatReader.startWarmup(source.getServer());
+            if (key.equals("scoreboard-name-color-enabled") || key.equals("player-name-color-render-mode")
+                    || key.startsWith("metric-color-")) refreshColors(source.getServer());
+            if (key.startsWith("metric-label-")) refreshMetricLabels(source.getServer());
             boolean webRunning = !webOption || WebDashboard.restart(source.getServer());
             source.sendFeedback(() -> Text.literal("已保存配置：" + key + " = "
                     + (normalized.isEmpty() ? "(空/自动)" : normalized)).formatted(Formatting.GREEN), true);
@@ -482,6 +650,7 @@ public final class RankBoardMod implements ModInitializer {
     private int reloadConfig(ServerCommandSource source) {
         RankBoardConfig.load(source.getServer());
         StatReader.startWarmup(source.getServer());
+        refreshColors(source.getServer());
         boolean webRunning = WebDashboard.restart(source.getServer());
         if (!webRunning) {
             source.sendError(Text.literal("配置已重载，但网页服务启动失败；请检查服务器日志和网页配置。"));
@@ -515,6 +684,10 @@ public final class RankBoardMod implements ModInitializer {
     private void handleLookUpSneakMenu(net.minecraft.server.MinecraftServer server) {
         if (!RankBoardConfig.get().lookUpSneakMenuEnabled) return;
         for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+            if (!LeaderboardState.get(server).isLookMenuEnabled(player.getUuid())) {
+                LOOK_MENU_HELD.remove(player.getUuid());
+                continue;
+            }
             boolean active = player.isSneaking() && player.getPitch() <= -60.0F;
             if (active && LOOK_MENU_HELD.add(player.getUuid())) menu(player.getCommandSource());
             else if (!active) LOOK_MENU_HELD.remove(player.getUuid());
@@ -523,6 +696,11 @@ public final class RankBoardMod implements ModInitializer {
 
     private static Text clickable(String label, Formatting color, String command, String hover) {
         return Text.literal(label).setStyle(TextCompat.interactive(Style.EMPTY.withColor(color), command, Text.literal(hover)));
+    }
+
+    private static Text clickable(String label, Metric metric, String command, String hover) {
+        return Text.literal(label).setStyle(TextCompat.interactive(
+                Style.EMPTY.withColor(RankBoardColors.renderedRgb(metric)), command, Text.literal(hover)));
     }
 
     private static Text websiteButton(ServerCommandSource source) {
@@ -539,12 +717,14 @@ public final class RankBoardMod implements ModInitializer {
         }
     }
 
-    private int setNameColor(ServerCommandSource source, boolean enabled) {
+    private int setLookMenu(ServerCommandSource source, boolean enabled) {
         try {
             ServerPlayerEntity player = source.getPlayerOrThrow();
-            LeaderboardState.get(source.getServer()).setNameColorEnabled(player.getUuid(), enabled);
-            BoardService.refreshAll(source.getServer());
-            source.sendFeedback(() -> Text.literal(enabled ? "已开启自己的榜单名字颜色。" : "已关闭自己的榜单名字颜色。"), false);
+            LeaderboardState.get(source.getServer()).setLookMenuEnabled(player.getUuid(), enabled);
+            LOOK_MENU_HELD.remove(player.getUuid());
+            source.sendFeedback(() -> Text.literal(enabled
+                    ? "已开启自己的抬头+蹲起菜单。"
+                    : "已关闭自己的抬头+蹲起菜单；可输入 /leaderboard lookmenu true 重新开启。"), false);
             return 1;
         } catch (com.mojang.brigadier.exceptions.CommandSyntaxException exception) {
             source.sendError(Text.literal("该命令只能由玩家执行。"));
@@ -552,27 +732,211 @@ public final class RankBoardMod implements ModInitializer {
         }
     }
 
-    private int nameColorStatus(ServerCommandSource source) {
+    private int lookMenuStatus(ServerCommandSource source) {
         try {
-            boolean enabled = LeaderboardState.get(source.getServer()).isNameColorEnabled(source.getPlayerOrThrow().getUuid());
-            source.sendFeedback(() -> Text.literal("自己的榜单名字颜色：" + (enabled ? "已开启" : "已关闭")), false);
-            return enabled ? 1 : 0;
+            boolean personal = LeaderboardState.get(source.getServer())
+                    .isLookMenuEnabled(source.getPlayerOrThrow().getUuid());
+            boolean global = RankBoardConfig.get().lookUpSneakMenuEnabled;
+            source.sendFeedback(() -> Text.literal("自己的抬头+蹲起菜单："
+                    + (personal ? "已开启" : "已关闭") + "；全服功能：" + (global ? "已开启" : "已关闭")), false);
+            return personal && global ? 1 : 0;
         } catch (com.mojang.brigadier.exceptions.CommandSyntaxException exception) {
             source.sendError(Text.literal("该命令只能由玩家执行。"));
             return 0;
         }
     }
 
+    private int setGlobalLookMenu(ServerCommandSource source, boolean enabled) {
+        try {
+            RankBoardConfig.set(source.getServer(), "look-up-sneak-menu-enabled", Boolean.toString(enabled));
+            LOOK_MENU_HELD.clear();
+            source.sendFeedback(() -> Text.literal(enabled
+                    ? "已开启全服抬头+蹲起菜单；玩家个人关闭状态保持不变。"
+                    : "已关闭全服所有玩家的抬头+蹲起菜单。"), true);
+            return 1;
+        } catch (java.io.IOException exception) {
+            source.sendError(Text.literal("全服抬头蹲起菜单设置保存失败：" + exception.getMessage()));
+            return 0;
+        }
+    }
+
+    private int globalLookMenuStatus(ServerCommandSource source) {
+        boolean enabled = RankBoardConfig.get().lookUpSneakMenuEnabled;
+        source.sendFeedback(() -> Text.literal("全服抬头+蹲起菜单：" + (enabled ? "已开启" : "已关闭")), false);
+        return enabled ? 1 : 0;
+    }
+
+    private int setNameColor(ServerCommandSource source, String mode) {
+        try {
+            String normalized = RankBoardConfig.set(source.getServer(), "scoreboard-name-color-enabled", mode);
+            BoardService.refreshAll(source.getServer());
+            PlayerNameColors.refreshAll(source.getServer());
+            source.sendFeedback(() -> Text.literal("全服玩家名字颜色模式：" + normalized), true);
+            return 1;
+        } catch (IllegalArgumentException | java.io.IOException exception) {
+            source.sendError(Text.literal("名字颜色模式保存失败：" + exception.getMessage()));
+            return 0;
+        }
+    }
+
+    private int nameColorStatus(ServerCommandSource source) {
+        String mode = RankBoardConfig.get().nameColorMode.serialized;
+        String render = RankBoardConfig.get().nameColorRenderMode.serialized;
+        source.sendFeedback(() -> Text.literal("全服玩家名字颜色模式：" + mode + "；渲染：" + render), false);
+        return RankBoardConfig.get().nameColorMode == RankBoardConfig.NameColorMode.DISABLED ? 0 : 1;
+    }
+
+    private int showMetricLabel(ServerCommandSource source, Metric metric) {
+        source.sendFeedback(() -> Text.literal(metric.command + " = " + metric.label()), false);
+        return 1;
+    }
+
+    private int setMetricLabel(ServerCommandSource source, Metric metric, String value) {
+        return saveMetricLabel(source, metric, value, "已设置");
+    }
+
+    private int resetMetricLabel(ServerCommandSource source, Metric metric) {
+        String key = "metric-label-" + metric.command;
+        return saveMetricLabel(source, metric, RankBoardConfig.defaultValue(key), "已恢复默认");
+    }
+
+    private int resetAllMetricLabels(ServerCommandSource source) {
+        try {
+            for (Metric metric : Metric.values()) {
+                String key = "metric-label-" + metric.command;
+                RankBoardConfig.set(source.getServer(), key, RankBoardConfig.defaultValue(key));
+            }
+            refreshMetricLabels(source.getServer());
+            source.sendFeedback(() -> Text.literal("已恢复全部榜单默认名称。"), true);
+            return Metric.values().length;
+        } catch (java.io.IOException exception) {
+            source.sendError(Text.literal("榜单名称保存失败：" + exception.getMessage()));
+            return 0;
+        }
+    }
+
+    private int listMetricLabels(ServerCommandSource source) {
+        for (Metric metric : Metric.values()) {
+            source.sendFeedback(() -> Text.literal(metric.command + " = " + metric.label()), false);
+        }
+        return Metric.values().length;
+    }
+
+    private int saveMetricLabel(ServerCommandSource source, Metric metric, String value, String action) {
+        try {
+            String normalized = RankBoardConfig.set(source.getServer(), "metric-label-" + metric.command, value);
+            refreshMetricLabels(source.getServer());
+            source.sendFeedback(() -> Text.literal(action + " " + metric.command + "：" + normalized), true);
+            return 1;
+        } catch (IllegalArgumentException | java.io.IOException exception) {
+            source.sendError(Text.literal("榜单名称保存失败：" + exception.getMessage()));
+            return 0;
+        }
+    }
+
+    private static void refreshMetricLabels(net.minecraft.server.MinecraftServer server) {
+        BoardService.refreshAll(server);
+        WebDashboard.invalidateRankings();
+    }
+
+    private int setMetricColor(ServerCommandSource source, Metric metric, String value) {
+        return saveMetricColor(source, metric, presetHex(value), "已设置");
+    }
+
+    private int showColorPresets(ServerCommandSource source, Metric metric) {
+        String current = RankBoardConfig.value("metric-color-" + metric.command);
+        source.sendFeedback(() -> Text.literal(metric.label() + "当前颜色：")
+                .append(RankBoardColors.text(current, metric))
+                .append(Text.literal("；点击选择预设色：").formatted(Formatting.GRAY)), false);
+        for (int row = 0; row < 4; row++) {
+            Text line = Text.empty();
+            for (int column = 0; column < 4; column++) {
+                ColorPreset preset = COLOR_PRESETS.get(row * 4 + column);
+                if (column > 0) line = line.copy().append(Text.literal(" "));
+                line = line.copy().append(clickable("[" + preset.key + " " + preset.label + "]", preset.formatting,
+                        "/leaderboard color " + metric.command + " " + preset.key,
+                        "点击设置 " + metric.label() + " 为 " + preset.key + " / " + preset.label));
+            }
+            Text completed = line;
+            source.sendFeedback(() -> completed, false);
+        }
+        return COLOR_PRESETS.size();
+    }
+
+    private static java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions>
+    suggestColorPresets(com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
+        String remaining = builder.getRemainingLowerCase();
+        for (ColorPreset preset : COLOR_PRESETS) {
+            if (preset.key.startsWith(remaining)) {
+                builder.suggest(preset.key, new LiteralMessage(preset.label));
+            }
+        }
+        return builder.buildFuture();
+    }
+
+    private static String presetHex(String value) {
+        for (ColorPreset preset : COLOR_PRESETS) {
+            if (preset.key.equalsIgnoreCase(value)) return preset.hex();
+        }
+        return value;
+    }
+
+    private int resetMetricColor(ServerCommandSource source, Metric metric) {
+        String key = "metric-color-" + metric.command;
+        return saveMetricColor(source, metric, RankBoardConfig.defaultValue(key), "已恢复默认");
+    }
+
+    private int resetAllMetricColors(ServerCommandSource source) {
+        try {
+            for (Metric metric : Metric.values()) {
+                String key = "metric-color-" + metric.command;
+                RankBoardConfig.set(source.getServer(), key, RankBoardConfig.defaultValue(key));
+            }
+            refreshColors(source.getServer());
+            source.sendFeedback(() -> Text.literal("已恢复全部榜单默认颜色。"), true);
+            return Metric.values().length;
+        } catch (java.io.IOException exception) {
+            source.sendError(Text.literal("颜色配置保存失败：" + exception.getMessage()));
+            return 0;
+        }
+    }
+
+    private int listMetricColors(ServerCommandSource source) {
+        for (Metric metric : Metric.values()) {
+            String value = RankBoardConfig.value("metric-color-" + metric.command);
+            source.sendFeedback(() -> RankBoardColors.text(metric.command + " = " + value, metric), false);
+        }
+        return Metric.values().length;
+    }
+
+    private int saveMetricColor(ServerCommandSource source, Metric metric, String value, String action) {
+        String key = "metric-color-" + metric.command;
+        try {
+            String normalized = RankBoardConfig.set(source.getServer(), key, value);
+            refreshColors(source.getServer());
+            source.sendFeedback(() -> RankBoardColors.text(action + " " + metric.label() + "：" + normalized, metric), true);
+            return 1;
+        } catch (IllegalArgumentException | java.io.IOException exception) {
+            source.sendError(Text.literal("颜色配置保存失败：" + exception.getMessage()));
+            return 0;
+        }
+    }
+
+    private static void refreshColors(net.minecraft.server.MinecraftServer server) {
+        BoardService.refreshAll(server);
+        PlayerNameColors.refreshAll(server);
+    }
+
     private int setMetricDisplay(ServerCommandSource source, Metric metric, boolean enabled) {
         LeaderboardState.get(source.getServer()).setMetricDisplayEnabled(metric, enabled);
         BoardService.refreshAll(source.getServer());
-        source.sendFeedback(() -> Text.literal(enabled ? metric.label + " 已恢复显示。" : metric.label + " 已禁止显示。"), true);
+        source.sendFeedback(() -> Text.literal(enabled ? metric.label() + " 已恢复显示。" : metric.label() + " 已禁止显示。"), true);
         return 1;
     }
 
     private int metricDisplayStatus(ServerCommandSource source, Metric metric) {
         boolean enabled = LeaderboardState.get(source.getServer()).isMetricDisplayEnabled(metric);
-        source.sendFeedback(() -> Text.literal(metric.label + " 显示：" + (enabled ? "已开启" : "已禁用")), false);
+        source.sendFeedback(() -> Text.literal(metric.label() + " 显示：" + (enabled ? "已开启" : "已禁用")), false);
         return enabled ? 1 : 0;
     }
 
@@ -685,19 +1049,21 @@ public final class RankBoardMod implements ModInitializer {
                         + "），当前榜单可能不完整。").formatted(Formatting.GRAY), false);
             }
             List<Entry> entries = entries(source.getServer(), period, metric);
-            source.sendFeedback(() -> Text.literal("=== " + period.label + " " + metric.label + " ===").formatted(Formatting.GOLD), false);
+            source.sendFeedback(() -> RankBoardColors.text("=== " + period.label + " " + metric.label() + " ===", metric), false);
             if (entries.isEmpty()) {
                 source.sendFeedback(() -> Text.literal("没有可用于排行的玩家统计。 ").formatted(Formatting.GRAY), false);
                 return 0;
             }
             long total = total(entries);
             source.sendFeedback(() -> Text.literal("总和 ").formatted(Formatting.GRAY)
-                    .append(Text.literal(format(metric, total)).formatted(Formatting.AQUA)), false);
+                    .append(RankBoardColors.text(format(metric, total), metric)), false);
             for (int i = 0; i < Math.min(limit, entries.size()); i++) {
                 Entry entry = entries.get(i);
                 int rank = i + 1;
                 source.sendFeedback(() -> Text.literal(rank + " ").formatted(Formatting.YELLOW)
-                        .append(Text.literal(entry.name())).append(Text.literal("  " + format(metric, entry.value())).formatted(Formatting.AQUA)), false);
+                        .append(RankBoardColors.text(entry.name(), metric))
+                        .append(Text.literal("  ").formatted(Formatting.GRAY))
+                        .append(RankBoardColors.text(format(metric, entry.value()), metric)), false);
             }
             return entries.size();
         } catch (RuntimeException exception) {
@@ -749,15 +1115,19 @@ public final class RankBoardMod implements ModInitializer {
     public enum Metric {
         FOOD("food", "大胃王榜", Formatting.GOLD, RankBoardMod::foodUsed),
         JUMPS("jumps", "跳跃榜", Formatting.LIGHT_PURPLE, p -> custom(p, Stats.JUMP)),
-        MINED("mined", "挖掘榜", Formatting.GRAY, RankBoardMod::mined),
-        PLACED("placed", "放置榜", Formatting.DARK_GREEN, RankBoardMod::placed),
+        MINED("mined", "挖掘榜", Formatting.BLUE, RankBoardMod::mined),
+        PLACED("placed", "放置榜", Formatting.DARK_AQUA, RankBoardMod::placed),
         KILLS("kills", "击杀榜", Formatting.RED, p -> custom(p, Stats.MOB_KILLS) + custom(p, Stats.PLAYER_KILLS)),
         DEATHS("deaths", "死亡榜", Formatting.DARK_RED, p -> custom(p, Stats.DEATHS)),
-        TRADES("trades", "交易榜", Formatting.AQUA, p -> custom(p, Stats.TRADED_WITH_VILLAGER)),
-        PLAY_TIME("playtime", "在线时间榜", Formatting.DARK_AQUA, p -> custom(p, Stats.PLAY_TIME)),
-        ELYTRA_DISTANCE("elytra", "鞘翅飞行榜", Formatting.LIGHT_PURPLE, p -> custom(p, Stats.AVIATE_ONE_CM)),
-        FISHING("fishing", "钓鱼榜", Formatting.BLUE, p -> custom(p, Stats.FISH_CAUGHT)),
-        DAMAGE_TAKEN("damage", "受伤害榜", Formatting.YELLOW, p -> custom(p, Stats.DAMAGE_TAKEN));
+        TRADES("trades", "交易榜", Formatting.GREEN, p -> custom(p, Stats.TRADED_WITH_VILLAGER)),
+        PLAY_TIME("playtime", "在线榜", Formatting.AQUA, p -> custom(p, Stats.PLAY_TIME)),
+        ELYTRA_DISTANCE("elytra", "飞行榜", Formatting.LIGHT_PURPLE, p -> custom(p, Stats.AVIATE_ONE_CM)),
+        FISHING("fishing", "钓鱼榜", Formatting.DARK_BLUE, p -> custom(p, Stats.FISH_CAUGHT)),
+        DAMAGE_TAKEN("damage", "受伤榜", Formatting.RED, p -> custom(p, Stats.DAMAGE_TAKEN)),
+        DROPPED("dropped", "丢垃圾榜", Formatting.DARK_GRAY, RankBoardMod::dropped),
+        PICKED_UP("picked", "拾荒榜", Formatting.GREEN, RankBoardMod::pickedUp),
+        CRAFTED("crafted", "合成榜", Formatting.GOLD, RankBoardMod::crafted),
+        REDSTONE_PLACED("redstone", "红石大蛇榜", Formatting.RED, RankBoardMod::redstonePlaced);
 
         final String command;
         final String label;
@@ -767,6 +1137,7 @@ public final class RankBoardMod implements ModInitializer {
             this.command = command; this.label = label; this.nameColor = nameColor; this.counter = counter;
         }
         long read(ServerPlayerEntity player) { return counter.read(player); }
+        String label() { return RankBoardConfig.get().metricLabel(this); }
     }
 
     public enum Period {
@@ -789,7 +1160,24 @@ public final class RankBoardMod implements ModInitializer {
     private static long foodUsed(ServerPlayerEntity player) { return Registries.ITEM.stream().filter(item -> item.getComponents().get(DataComponentTypes.FOOD) != null).mapToLong(item -> player.getStatHandler().getStat(Stats.USED.getOrCreateStat(item))).sum(); }
     private static long mined(ServerPlayerEntity player) { return Registries.BLOCK.stream().mapToLong(block -> player.getStatHandler().getStat(Stats.MINED.getOrCreateStat(block))).sum(); }
     private static long placed(ServerPlayerEntity player) { return Registries.ITEM.stream().filter(BlockItem.class::isInstance).mapToLong(item -> player.getStatHandler().getStat(Stats.USED.getOrCreateStat(item))).sum(); }
+    private static long dropped(ServerPlayerEntity player) { return Registries.ITEM.stream().mapToLong(item -> player.getStatHandler().getStat(Stats.DROPPED.getOrCreateStat(item))).sum(); }
+    private static long pickedUp(ServerPlayerEntity player) { return Registries.ITEM.stream().mapToLong(item -> player.getStatHandler().getStat(Stats.PICKED_UP.getOrCreateStat(item))).sum(); }
+    private static long crafted(ServerPlayerEntity player) { return Registries.ITEM.stream().mapToLong(item -> player.getStatHandler().getStat(Stats.CRAFTED.getOrCreateStat(item))).sum(); }
+    private static long redstonePlaced(ServerPlayerEntity player) { return Registries.ITEM.stream().filter(RankBoardMod::isRedstoneComponent).mapToLong(item -> player.getStatHandler().getStat(Stats.USED.getOrCreateStat(item))).sum(); }
+    static boolean isRedstoneComponent(Item item) {
+        String path = Registries.ITEM.getId(item).getPath();
+        return REDSTONE_COMPONENTS.contains(path)
+                || path.endsWith("_button")
+                || path.endsWith("_pressure_plate")
+                || path.endsWith("_door")
+                || path.endsWith("_trapdoor")
+                || path.endsWith("_fence_gate")
+                || path.endsWith("_bulb");
+    }
 
     @FunctionalInterface interface Counter { long read(ServerPlayerEntity player); }
     record Entry(String name, long value) { }
+    private record ColorPreset(String key, String label, Formatting formatting) {
+        String hex() { return String.format(java.util.Locale.ROOT, "#%06X", formatting.getColorValue()); }
+    }
 }

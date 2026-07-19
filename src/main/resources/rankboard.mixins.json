@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "cn.bamgdam.rankboard.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "server": [
+    "PlayerEntityNameMixin",
+    "ServerPlayerListNameMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

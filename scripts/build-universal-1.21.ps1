@@ -64,7 +64,7 @@ foreach ($variant in $variants) {
         "-Pmapping_type=yarn",
         "-Pyarn_mappings=$($variant.Mappings)",
         "-Pminecraft_dependency=$($variant.Range)",
-        "-Ploader_version=0.16.14",
+        "-Ploader_version=0.15.11",
         "-Pfabric_version=$($variant.Fabric)"
     )
     & $gradle @arguments
@@ -97,7 +97,7 @@ $wrapperManifest = [ordered]@{
     environment = "*"
     entrypoints = @{}
     depends = [ordered]@{
-        fabricloader = ">=0.16.14"
+        fabricloader = ">=0.15.11"
         minecraft = ">=1.21 <1.22"
         java = ">=21"
     }

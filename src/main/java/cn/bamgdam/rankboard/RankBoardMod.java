@@ -405,7 +405,7 @@ public final class RankBoardMod implements ModInitializer {
                         "/leaderboard scoreboard blocking ", "屏蔽其他模组计分板");
                 helpCommand(source, "/leaderboard namecolor <true|false|scoreboard-only|status>", "/leaderboard namecolor ",
                         "设置全服名字颜色：全部位置、全部关闭或仅排行榜；立即生效");
-                helpCommand(source, "/leaderboard color list", "/leaderboard color list", "列出 11 个榜单的当前颜色");
+                helpCommand(source, "/leaderboard color list", "/leaderboard color list", "列出全部榜单的当前颜色");
                 helpCommand(source, "/leaderboard color <榜单> [颜色名|#RRGGBB]", "/leaderboard color ", "不填颜色时打开英中双语 16 色预选；颜色名支持 Tab 补全；立即生效");
                 helpCommand(source, "/leaderboard color reset <榜单|all>", "/leaderboard color reset ", "恢复单个或全部榜单默认颜色");
                 helpCommand(source, "/leaderboard label <榜单> <名称>", "/leaderboard label ", "自定义榜单显示名称；支持中文、英文和空格；立即生效");
@@ -566,17 +566,31 @@ public final class RankBoardMod implements ModInitializer {
             source.sendFeedback(() -> finalSecondRow, false);
         }
 
+        List<Metric> menuMetrics = orderedMenuMetrics();
         int visible = 0;
-        visible += sendMetricMenuRow(source, Metric.ELYTRA_DISTANCE, Metric.JUMPS, Metric.MINED, Metric.PLACED);
-        visible += sendMetricMenuRow(source, Metric.FISHING, Metric.CRAFTED, Metric.TRADES, Metric.PLAY_TIME);
-        visible += sendMetricMenuRow(source, Metric.KILLS, Metric.DEATHS, Metric.DAMAGE_TAKEN, Metric.DAMAGE_DEALT);
-        visible += sendMetricMenuRow(source, Metric.PICKED_UP, Metric.FOOD, Metric.DROPPED, Metric.REDSTONE_PLACED);
+        for (int start = 0; start < menuMetrics.size(); start += 4) {
+            visible += sendMetricMenuRow(source, menuMetrics.subList(
+                    start, Math.min(start + 4, menuMetrics.size())).toArray(Metric[]::new));
+        }
         if (visible == 0) {
             source.sendFeedback(() -> Text.literal("所有榜单显示均已被 OP 禁用。\n").formatted(Formatting.GRAY), false);
         }
         source.sendFeedback(() -> Text.literal("点击榜单即可切换自己的原版侧边栏。").formatted(Formatting.GRAY), false);
         BoardService.sendForeignScoreboardPrompt(source);
         return 1;
+    }
+
+    private static List<Metric> orderedMenuMetrics() {
+        List<Metric> ordered = new java.util.ArrayList<>(List.of(
+                Metric.ELYTRA_DISTANCE, Metric.JUMPS, Metric.MINED, Metric.PLACED,
+                Metric.FISHING, Metric.CRAFTED, Metric.TRADES, Metric.PLAY_TIME,
+                Metric.KILLS, Metric.PVP_KILLS, Metric.DEATHS, Metric.DAMAGE_TAKEN,
+                Metric.DAMAGE_DEALT, Metric.PICKED_UP, Metric.FOOD, Metric.DROPPED,
+                Metric.REDSTONE_PLACED));
+        for (Metric metric : Metric.values()) {
+            if (!ordered.contains(metric)) ordered.add(metric);
+        }
+        return List.copyOf(ordered);
     }
 
     private int sendMetricMenuRow(ServerCommandSource source, Metric... metrics) {

@@ -426,7 +426,7 @@ public final class RankBoardMod implements ModInitializer {
                 + "计分板标题颜色：scoreboard-title-color-enabled，默认 true，独立于玩家名字颜色。\n"
                 + "模组白名单：config/rankboard/rankboard-whitelist.json；由 mod-whitelist-enabled 控制，默认关闭。\n"
                 + "周期：daily 每日，weekly 每周，monthly 每月，yearly 每年，all 总计\n"
-                + "榜单：food 食物，jumps 跳跃，mined 挖掘，placed 放置，kills 击杀，deaths 死亡，"
+                + "榜单：food 食物，jumps 跳跃，mined 挖掘，placed 放置，kills 击杀，pvp 玩家击杀，deaths 死亡，"
                 + "trades 交易，playtime 在线，elytra 鞘翅，fishing 钓鱼，damage 受伤";
         source.sendSuccess(() -> Component.literal(help).withStyle(ChatFormatting.GRAY), false);
         if (op) {
@@ -503,17 +503,31 @@ public final class RankBoardMod implements ModInitializer {
             source.sendSuccess(() -> finalSecondRow, false);
         }
 
+        List<Metric> menuMetrics = orderedMenuMetrics();
         int visible = 0;
-        visible += sendMetricMenuRow(source, Metric.ELYTRA_DISTANCE, Metric.JUMPS, Metric.MINED, Metric.PLACED);
-        visible += sendMetricMenuRow(source, Metric.FISHING, Metric.CRAFTED, Metric.TRADES, Metric.PLAY_TIME);
-        visible += sendMetricMenuRow(source, Metric.KILLS, Metric.DEATHS, Metric.DAMAGE_TAKEN, Metric.DAMAGE_DEALT);
-        visible += sendMetricMenuRow(source, Metric.PICKED_UP, Metric.FOOD, Metric.DROPPED, Metric.REDSTONE_PLACED);
+        for (int start = 0; start < menuMetrics.size(); start += 4) {
+            visible += sendMetricMenuRow(source, menuMetrics.subList(
+                    start, Math.min(start + 4, menuMetrics.size())).toArray(Metric[]::new));
+        }
         if (visible == 0) {
             source.sendSuccess(() -> Component.literal("所有榜单显示均已被 OP 禁用。\n").withStyle(ChatFormatting.GRAY), false);
         }
         source.sendSuccess(() -> Component.literal("点击榜单即可切换自己的原版侧边栏。").withStyle(ChatFormatting.GRAY), false);
         BoardService.sendForeignScoreboardPrompt(source);
         return 1;
+    }
+
+    private static List<Metric> orderedMenuMetrics() {
+        List<Metric> ordered = new java.util.ArrayList<>(List.of(
+                Metric.ELYTRA_DISTANCE, Metric.JUMPS, Metric.MINED, Metric.PLACED,
+                Metric.FISHING, Metric.CRAFTED, Metric.TRADES, Metric.PLAY_TIME,
+                Metric.KILLS, Metric.PVP_KILLS, Metric.DEATHS, Metric.DAMAGE_TAKEN,
+                Metric.DAMAGE_DEALT, Metric.PICKED_UP, Metric.FOOD, Metric.DROPPED,
+                Metric.REDSTONE_PLACED));
+        for (Metric metric : Metric.values()) {
+            if (!ordered.contains(metric)) ordered.add(metric);
+        }
+        return List.copyOf(ordered);
     }
 
     private int sendMetricMenuRow(CommandSourceStack source, Metric... metrics) {

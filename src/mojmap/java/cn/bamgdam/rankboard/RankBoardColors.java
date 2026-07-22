@@ -19,13 +19,27 @@ final class RankBoardColors {
 
     static ChatFormatting legacy(RankBoardMod.Metric metric) { return nearestLegacy(rgb(metric)); }
 
+    static ChatFormatting legacy(RankBoardMod.Metric metric, boolean carousel) {
+        return carousel && !RankBoardConfig.get().carouselColorFollowMetric
+                ? ChatFormatting.AQUA : legacy(metric);
+    }
+
     static int renderedRgb(RankBoardMod.Metric metric) {
         if (RankBoardConfig.get().nameColorRenderMode == RankBoardConfig.NameColorRenderMode.RGB) return rgb(metric);
         return colorValue(legacy(metric));
     }
 
+    static int renderedRgb(RankBoardMod.Metric metric, boolean carousel) {
+        if (carousel && !RankBoardConfig.get().carouselColorFollowMetric) return colorValue(ChatFormatting.AQUA);
+        return renderedRgb(metric);
+    }
+
     static MutableComponent text(String value, RankBoardMod.Metric metric) {
         return Component.literal(value).withStyle(style -> style.withColor(renderedRgb(metric)));
+    }
+
+    static MutableComponent text(String value, RankBoardMod.Metric metric, boolean carousel) {
+        return Component.literal(value).withStyle(style -> style.withColor(renderedRgb(metric, carousel)));
     }
 
     static ChatFormatting nearestLegacy(int rgb) {

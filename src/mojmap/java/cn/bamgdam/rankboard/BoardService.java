@@ -440,7 +440,10 @@ final class BoardService {
             Selection entrySelection = entryPlayer == null ? null : SELECTIONS.get(entryPlayer.getUUID());
             if (RankBoardConfig.get().nameColorMode != RankBoardConfig.NameColorMode.DISABLED
                     && entryPlayer != null && entrySelection != null) {
-                displayName = Optional.of(RankBoardColors.text(entry.name(), entrySelection.metric));
+                LeaderboardState.BoardPreference entryPreference = LeaderboardState.get(PlayerCompat.server(player))
+                        .boardPreference(entryPlayer.getUUID());
+                boolean entryCarousel = entryPreference != null && entryPreference.carousel();
+                displayName = Optional.of(RankBoardColors.text(entry.name(), entrySelection.metric, entryCarousel));
             }
             player.connection.send(new ClientboundSetScorePacket(
                     entry.name(), objective.getName(), value, displayName, scoreboardFormat(metric, value)));

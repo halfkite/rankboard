@@ -637,6 +637,7 @@ public final class RankBoardMod implements ModInitializer {
     private int setCarouselColor(CommandSourceStack source, boolean followMetric) {
         try {
             String value = RankBoardConfig.set(source.getServer(), "carousel-color-follow-metric", Boolean.toString(followMetric));
+            BoardService.refreshAll(source.getServer());
             source.sendSuccess(() -> Component.literal("已设置轮播标题颜色："
                     + (followMetric ? "跟随当前榜单颜色" : "固定青色")
                     + " (carousel-color-follow-metric=" + value + ")").withStyle(ChatFormatting.GREEN), true);
@@ -674,6 +675,7 @@ public final class RankBoardMod implements ModInitializer {
             if (key.equals("scoreboard-name-color-enabled") || key.equals("player-name-color-render-mode")
                     || key.startsWith("metric-color-")) refreshColors(source.getServer());
             if (key.equals("scoreboard-recipient-filter")) BoardService.refreshAll(source.getServer());
+            if (key.equals("carousel-color-follow-metric")) BoardService.refreshAll(source.getServer());
             if (key.startsWith("metric-label-")) refreshMetricLabels(source.getServer());
             boolean webRunning = !webOption || WebDashboard.restart(source.getServer());
             source.sendSuccess(() -> Component.literal("已保存配置：" + key + " = "

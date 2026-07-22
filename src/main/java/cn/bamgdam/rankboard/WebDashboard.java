@@ -2,6 +2,7 @@ package cn.bamgdam.rankboard;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import net.minecraft.server.MinecraftServer;
@@ -12,19 +13,26 @@ import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
+import java.net.InetAddress;
+import java.net.URI;
 import java.net.URLDecoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
+import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
@@ -46,7 +54,14 @@ final class WebDashboard {
     private static int dataRequestsPerSecond = 1;
     private static int iconRequestIntervalSeconds = 3;
     private static int rankingRefreshIntervalSeconds = 30;
+    private static int webPort = 8765;
+    private static String switcherName = "Minecraft Server";
+    private static int switcherWeight = 100;
+    private static List<String> switcherPeers = List.of();
     private static Properties webTheme = new Properties();
+    private static final HttpClient PEER_CLIENT = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofMillis(800)).followRedirects(HttpClient.Redirect.NEVER).build();
+    private static final Map<String, PeerSnapshot> PEER_SNAPSHOTS = new ConcurrentHashMap<>();
     private static final Map<String, RequestWindow> REQUEST_WINDOWS = new ConcurrentHashMap<>();
     private static final Map<String, CachedRanking> RANKING_CACHE = new ConcurrentHashMap<>();
     private static final Map<String, BurstPenaltyWindow> BURST_PENALTIES = new ConcurrentHashMap<>();
@@ -69,10 +84,16 @@ final class WebDashboard {
             Properties config = RankBoardConfig.loadWeb(server);
             String host = config.getProperty("host", "0.0.0.0");
             int port = Integer.parseInt(config.getProperty("port", "8765"));
+            webPort = port;
             dataRequestsPerSecond = Integer.parseInt(config.getProperty("web-data-requests-per-second", "1"));
             iconRequestIntervalSeconds = Integer.parseInt(config.getProperty("web-icon-request-interval-seconds", "3"));
             rankingRefreshIntervalSeconds = Integer.parseInt(config.getProperty("web-ranking-refresh-interval-seconds", "30"));
             serverName = resolveServerName(server, config.getProperty("server-name", "auto"));
+            String configuredSwitcherName = config.getProperty("web-switcher-name", "auto").strip();
+            switcherName = configuredSwitcherName.equalsIgnoreCase("auto") || configuredSwitcherName.isEmpty()
+                    ? serverName : configuredSwitcherName;
+            switcherWeight = Integer.parseInt(config.getProperty("web-switcher-weight", "100"));
+            switcherPeers = parsePeers(config.getProperty("web-switcher-peers", ""));
             websiteIcon = resolveIcon(server, config.getProperty("website-icon", "server-icon.png"));
             loadWebsiteIcon(websiteIcon);
             persistDetectedThemeBase(server, config, websiteIcon);
@@ -83,6 +104,7 @@ final class WebDashboard {
             http = HttpServer.create(new InetSocketAddress(host, port), 0);
             http.createContext("/api/rankings", WebDashboard::rankings);
             http.createContext("/api/site", WebDashboard::site);
+            http.createContext("/api/sites", WebDashboard::sites);
             http.createContext("/site-icon", WebDashboard::siteIcon);
             http.createContext("/avatar/", WebDashboard::avatar);
             http.createContext("/", WebDashboard::webAsset);
@@ -108,6 +130,8 @@ final class WebDashboard {
         websiteIconContentType = "application/octet-stream";
         websiteIconVersion = "none";
         webTheme = new Properties();
+        switcherPeers = List.of();
+        PEER_SNAPSHOTS.clear();
         REQUEST_WINDOWS.clear();
         BURST_PENALTIES.clear();
         RANKING_CACHE.clear();
@@ -357,6 +381,8 @@ final class WebDashboard {
         if (!enforceRateLimit(exchange, RequestKind.API_DATA)) return;
         JsonObject root = new JsonObject();
         root.addProperty("name", serverName);
+        root.addProperty("switcherName", switcherName);
+        root.addProperty("switcherWeight", switcherWeight);
         root.addProperty("rankingRefreshIntervalSeconds", rankingRefreshIntervalSeconds);
         root.addProperty("themeFollowIcon", Boolean.parseBoolean(
                 webTheme.getProperty("web-theme-follow-icon", "true")));
@@ -380,6 +406,120 @@ final class WebDashboard {
         }
         root.add("metrics", metrics);
         respond(exchange, 200, "application/json; charset=utf-8", root.toString());
+    }
+
+    private static void sites(HttpExchange exchange) throws IOException {
+        if (!enforceRateLimit(exchange, RequestKind.API_DATA)) return;
+        String currentUrl = currentOrigin(exchange);
+        LinkedHashMap<String, SiteEntry> unique = new LinkedHashMap<>();
+        SiteEntry current = new SiteEntry(switcherName, currentUrl, switcherWeight, true, true);
+        unique.put(endpointKey(currentUrl), current);
+
+        List<CompletableFuture<SiteEntry>> pending = new ArrayList<>();
+        for (String raw : switcherPeers) {
+            String url = normalizePeer(raw);
+            if (url == null) continue;
+            String key = endpointKey(url);
+            if (unique.containsKey(key)) continue;
+            unique.put(key, null);
+            pending.add(fetchPeer(url));
+        }
+        try {
+            CompletableFuture.allOf(pending.toArray(CompletableFuture[]::new)).get(2, TimeUnit.SECONDS);
+        } catch (Exception ignored) { }
+        for (CompletableFuture<SiteEntry> future : pending) {
+            SiteEntry entry = future.getNow(null);
+            if (entry != null) unique.put(endpointKey(entry.url), entry);
+        }
+        List<SiteEntry> entries = unique.values().stream().filter(java.util.Objects::nonNull)
+                .sorted(Comparator.comparingInt(SiteEntry::weight)
+                        .thenComparing(SiteEntry::name, String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(SiteEntry::url))
+                .toList();
+        JsonArray sites = new JsonArray();
+        for (SiteEntry entry : entries) {
+            JsonObject item = new JsonObject();
+            item.addProperty("name", entry.name);
+            item.addProperty("url", entry.url);
+            item.addProperty("weight", entry.weight);
+            item.addProperty("current", entry.current);
+            item.addProperty("online", entry.online);
+            sites.add(item);
+        }
+        JsonObject root = new JsonObject();
+        root.add("sites", sites);
+        respond(exchange, 200, "application/json; charset=utf-8", root.toString());
+    }
+
+    private static CompletableFuture<SiteEntry> fetchPeer(String url) {
+        long now = System.currentTimeMillis();
+        PeerSnapshot cached = PEER_SNAPSHOTS.get(url);
+        if (cached != null && now - cached.checkedAt < 15_000L) {
+            return CompletableFuture.completedFuture(
+                    new SiteEntry(cached.name, url, cached.weight, false, cached.online));
+        }
+        HttpRequest request = HttpRequest.newBuilder(URI.create(url + "/api/site"))
+                .timeout(Duration.ofMillis(1500)).GET().build();
+        return PEER_CLIENT.sendAsync(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
+                .thenApply(response -> {
+                    if (response.statusCode() != 200) throw new IllegalStateException("HTTP " + response.statusCode());
+                    JsonObject json = JsonParser.parseString(response.body()).getAsJsonObject();
+                    String name = json.has("switcherName") ? json.get("switcherName").getAsString()
+                            : json.has("name") ? json.get("name").getAsString() : url;
+                    int weight = json.has("switcherWeight") ? json.get("switcherWeight").getAsInt() : 100;
+                    PeerSnapshot snapshot = new PeerSnapshot(name, weight, true, System.currentTimeMillis());
+                    PEER_SNAPSHOTS.put(url, snapshot);
+                    return new SiteEntry(name, url, weight, false, true);
+                }).exceptionally(exception -> {
+                    PeerSnapshot previous = PEER_SNAPSHOTS.get(url);
+                    PeerSnapshot offline = new PeerSnapshot(previous == null ? url : previous.name,
+                            previous == null ? 10000 : previous.weight, false, System.currentTimeMillis());
+                    PEER_SNAPSHOTS.put(url, offline);
+                    return new SiteEntry(offline.name, url, offline.weight, false, false);
+                });
+    }
+
+    private static List<String> parsePeers(String configured) {
+        if (configured == null || configured.isBlank()) return List.of();
+        return java.util.Arrays.stream(configured.split(",")).map(String::strip)
+                .filter(value -> !value.isEmpty()).limit(64).toList();
+    }
+
+    private static String normalizePeer(String raw) {
+        try {
+            String value = raw.contains("://") ? raw : "http://" + raw;
+            URI uri = URI.create(value);
+            if (!(uri.getScheme().equalsIgnoreCase("http") || uri.getScheme().equalsIgnoreCase("https"))
+                    || uri.getHost() == null || uri.getUserInfo() != null
+                    || (uri.getPath() != null && !uri.getPath().isBlank() && !uri.getPath().equals("/"))
+                    || uri.getQuery() != null || uri.getFragment() != null) return null;
+            int port = uri.getPort() < 0 ? webPort : uri.getPort();
+            String host = uri.getHost().contains(":") ? "[" + uri.getHost() + "]" : uri.getHost();
+            return uri.getScheme().toLowerCase(java.util.Locale.ROOT) + "://" + host + ":" + port;
+        } catch (RuntimeException exception) {
+            RankBoardMod.LOGGER.warn("Ignoring invalid RankBoard peer address {}", raw);
+            return null;
+        }
+    }
+
+    private static String currentOrigin(HttpExchange exchange) {
+        String host = exchange.getRequestHeaders().getFirst("Host");
+        if (host == null || host.isBlank()) host = "127.0.0.1:" + webPort;
+        if (!host.matches(".*:\\d+$") && !host.startsWith("[")) host += ":" + webPort;
+        return "http://" + host;
+    }
+
+    private static String endpointKey(String url) {
+        try {
+            URI uri = URI.create(url);
+            int port = uri.getPort() < 0 ? webPort : uri.getPort();
+            String address;
+            try { address = InetAddress.getByName(uri.getHost()).getHostAddress(); }
+            catch (IOException exception) { address = uri.getHost().toLowerCase(java.util.Locale.ROOT); }
+            return address + ":" + port;
+        } catch (RuntimeException exception) {
+            return url.toLowerCase(java.util.Locale.ROOT);
+        }
     }
 
     private static RankBoardMod.Metric metric(String command) {
@@ -632,6 +772,10 @@ final class WebDashboard {
     private record RateDecision(boolean allowed, int remaining, long retryAfterSeconds) { }
 
     private record CachedRanking(long createdAt, String body) { }
+
+    private record SiteEntry(String name, String url, int weight, boolean current, boolean online) { }
+
+    private record PeerSnapshot(String name, int weight, boolean online, long checkedAt) { }
 
     private record BurstPenalty(int requests, boolean active, long until) {
         private static final BurstPenalty NONE = new BurstPenalty(0, false, 0);

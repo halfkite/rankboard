@@ -152,6 +152,26 @@ public final class RankBoardMod implements ModInitializer {
                                 .executes(context -> setWebThemeRgb(context.getSource(),
                                         StringArgumentType.getString(context, "color")))))
                 .then(CommandManager.literal("status").executes(context -> webThemeModeStatus(context.getSource()))));
+        root.then(CommandManager.literal("webswitch").requires(source -> CommandPermissionCompat.has(source, 2))
+                .executes(context -> webSwitchStatus(context.getSource()))
+                .then(CommandManager.literal("status").executes(context -> webSwitchStatus(context.getSource())))
+                .then(CommandManager.literal("list").executes(context -> webSwitchList(context.getSource())))
+                .then(CommandManager.literal("name")
+                        .then(CommandManager.argument("name", StringArgumentType.greedyString())
+                                .executes(context -> setConfig(context.getSource(), "web-switcher-name",
+                                        StringArgumentType.getString(context, "name")))))
+                .then(CommandManager.literal("weight")
+                        .then(CommandManager.argument("weight", IntegerArgumentType.integer(1, 10000))
+                                .executes(context -> setConfig(context.getSource(), "web-switcher-weight",
+                                        Integer.toString(IntegerArgumentType.getInteger(context, "weight"))))))
+                .then(CommandManager.literal("add")
+                        .then(CommandManager.argument("address", StringArgumentType.word())
+                                .executes(context -> modifyWebSwitchPeer(context.getSource(), true,
+                                        StringArgumentType.getString(context, "address")))))
+                .then(CommandManager.literal("remove")
+                        .then(CommandManager.argument("address", StringArgumentType.word())
+                                .executes(context -> modifyWebSwitchPeer(context.getSource(), false,
+                                        StringArgumentType.getString(context, "address"))))));
         root.then(CommandManager.literal("display")
                 .then(CommandManager.literal("on").executes(context -> BoardService.enable(context.getSource())))
                 .then(CommandManager.literal("off").executes(context -> BoardService.disable(context.getSource()))
@@ -393,6 +413,8 @@ public final class RankBoardMod implements ModInitializer {
                         "/leaderboard config set website-button-enabled ", "显示或隐藏菜单和帮助中的网站按钮");
                 if (op) helpCommand(source, "/leaderboard webtheme <icon|blue|rgb #RRGGBB|true|false|status>",
                         "/leaderboard webtheme ", "选择图标自动取色或默认蓝色网页主题");
+                if (op) helpCommand(source, "/leaderboard webswitch <name|weight|add|remove|list|status>",
+                        "/leaderboard webswitch ", "设置左侧服务器切换按钮名称、排序权重和其他网页地址");
                 helpCommand(source, "/leaderboard config list|get|set|reload", "/leaderboard config ", "查看或修改配置");
                 helpCommand(source, "/leaderboard ratelimit clear", "/leaderboard ratelimit clear", "清除网页限流");
                 source.sendFeedback(() -> Text.literal(
@@ -451,6 +473,8 @@ public final class RankBoardMod implements ModInitializer {
                         "/leaderboard config set website-button-enabled ", "显示或隐藏菜单和帮助中的网站按钮");
                 helpCommand(source, "/leaderboard webtheme <icon|blue|rgb #RRGGBB|true|false|status>",
                         "/leaderboard webtheme ", "选择图标自动取色或默认蓝色网页主题");
+                helpCommand(source, "/leaderboard webswitch <name|weight|add|remove|list|status>",
+                        "/leaderboard webswitch ", "管理网页服务器切换列表；权重越小越靠前，1 最先显示");
                 helpCommand(source, "/leaderboard ratelimit clear", "/leaderboard ratelimit clear", "立即清除全部网页限流记录");
                 helpCommand(source, "/leaderboard cache <status|reload>", "/leaderboard cache ", "查看或重载历史统计缓存");
                 helpCommand(source, "/leaderboard cache threads <0-256|status>", "/leaderboard cache threads ",
@@ -527,6 +551,9 @@ public final class RankBoardMod implements ModInitializer {
                 configHelp(source, "host");
                 configHelp(source, "port");
                 configHelp(source, "server-name");
+                configHelp(source, "web-switcher-name");
+                configHelp(source, "web-switcher-weight");
+                configHelp(source, "web-switcher-peers");
                 configHelp(source, "website-icon");
                 configHelp(source, "web-data-requests-per-second");
                 configHelp(source, "web-icon-request-interval-seconds");
@@ -774,6 +801,37 @@ public final class RankBoardMod implements ModInitializer {
         String mode = followIcon ? "读取服务器图标颜色" : (base.equalsIgnoreCase("auto") ? "默认蓝色系" : "RGB 色系 " + base);
         source.sendFeedback(() -> Text.literal("网页主题：" + mode
                 + " (web-theme-follow-icon=" + followIcon + ")").formatted(Formatting.GRAY), false);
+        return 1;
+    }
+
+    private int modifyWebSwitchPeer(ServerCommandSource source, boolean add, String address) {
+        java.util.LinkedHashSet<String> peers = new java.util.LinkedHashSet<>();
+        String configured = RankBoardConfig.value("web-switcher-peers");
+        if (!configured.isBlank()) {
+            for (String peer : configured.split(",")) if (!peer.isBlank()) peers.add(peer.strip());
+        }
+        boolean changed = add ? peers.add(address.strip()) : peers.remove(address.strip());
+        if (!changed) {
+            source.sendFeedback(() -> Text.literal(add ? "该网页地址已经存在。" : "未找到该网页地址。"), false);
+            return 0;
+        }
+        return setConfig(source, "web-switcher-peers", String.join(",", peers));
+    }
+
+    private int webSwitchList(ServerCommandSource source) {
+        String configured = RankBoardConfig.value("web-switcher-peers");
+        source.sendFeedback(() -> Text.literal(configured.isBlank()
+                ? "未配置其他 RankBoard 网页。"
+                : "其他 RankBoard 网页：" + configured).formatted(Formatting.GRAY), false);
+        return configured.isBlank() ? 0 : configured.split(",").length;
+    }
+
+    private int webSwitchStatus(ServerCommandSource source) {
+        String name = RankBoardConfig.value("web-switcher-name");
+        String weight = RankBoardConfig.value("web-switcher-weight");
+        String peers = RankBoardConfig.value("web-switcher-peers");
+        source.sendFeedback(() -> Text.literal("网页切换：名称=" + name + "，权重=" + weight
+                + "，其他网页=" + (peers.isBlank() ? "无" : peers)).formatted(Formatting.GRAY), false);
         return 1;
     }
 

@@ -93,6 +93,9 @@ final class RankBoardConfig {
             option("web-data-requests-per-second", "1", FileKind.WEB, "请求限流", "同一 IP 对同一数据接口或网页资源每秒最多请求次数；默认 1，范围 1-100。"),
             option("web-ranking-refresh-interval-seconds", "30", FileKind.WEB, "网页数据", "网页排行榜数据快照刷新间隔秒数；默认 30，范围 1-3600。"),
             option("server-name", "auto", FileKind.WEB, "网页显示", "网页显示的服务器名称；默认 auto，自动读取服务器 MOTD。"),
+            option("web-switcher-name", "auto", FileKind.WEB, "网页切换", "服务器切换按钮名称；auto 使用网页服务器名称。"),
+            option("web-switcher-weight", "100", FileKind.WEB, "网页切换", "服务器切换按钮排序权重；数值越小越靠前，1 最先显示。"),
+            option("web-switcher-peers", "", FileKind.WEB, "网页切换", "其他 RankBoard 网页地址，逗号分隔；省略端口时沿用当前网页端口。"),
             option("website-icon", "server-icon.png", FileKind.WEB, "网页显示", "网页图标路径；默认 server-icon.png，相对路径以服务端根目录为基准。"),
             option("web-theme-follow-icon", "true", FileKind.WEB, "网页主题", "true 从左上角网站图标提取网页配色；false 使用默认蓝色系；默认 true。"),
             option("web-theme-base", "auto", FileKind.WEB, "网页主题", "主题基础色；图标取色模式会在开服时自动写入检测到的 #RRGGBB，也可手动设置。"),
@@ -403,6 +406,7 @@ final class RankBoardConfig {
             case "carousel-interval-seconds" -> normalizedInteger(value, 3, 3600);
             case "avatar-cache-days" -> normalizedInteger(value, 1, 365);
             case "port" -> normalizedInteger(value, 1, 65535);
+            case "web-switcher-weight" -> normalizedInteger(value, 1, 10000);
             case "web-data-requests-per-second" -> normalizedInteger(value, 1, 100);
             case "web-icon-request-interval-seconds" -> normalizedInteger(value, 1, 3600);
             case "scoreboard-live-update-window-seconds" -> normalizedInteger(value, 1, 300);
@@ -434,7 +438,8 @@ final class RankBoardConfig {
                 if (value.isEmpty()) throw new IllegalArgumentException(option.key + " 不能为空");
                 yield value;
             }
-            case "welcome-name", "server-name" -> value.isEmpty() ? "auto" : value;
+            case "welcome-name", "server-name", "web-switcher-name" -> value.isEmpty() ? "auto" : normalizedLabel(value);
+            case "web-switcher-peers" -> normalizePeerList(value);
             case "web-public-address" -> value.equalsIgnoreCase("auto") ? "" : value;
             default -> value;
         };
@@ -457,6 +462,20 @@ final class RankBoardConfig {
         if (value.isEmpty() || value.length() > 32) throw new IllegalArgumentException("榜单名称长度必须为 1-32 个字符");
         if (value.chars().anyMatch(Character::isISOControl)) throw new IllegalArgumentException("榜单名称不能包含控制字符");
         return value;
+    }
+
+    private static String normalizePeerList(String value) {
+        if (value.isEmpty()) return "";
+        java.util.LinkedHashSet<String> peers = new java.util.LinkedHashSet<>();
+        for (String raw : value.split(",")) {
+            String peer = raw.strip();
+            if (peer.isEmpty()) continue;
+            if (peer.chars().anyMatch(Character::isISOControl)) {
+                throw new IllegalArgumentException("网页地址不能包含控制字符");
+            }
+            peers.add(peer);
+        }
+        return String.join(",", peers);
     }
 
     private static String normalizedInteger(String value, int minimum, int maximum) {

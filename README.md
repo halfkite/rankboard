@@ -171,6 +171,9 @@ web-data-requests-per-second=1            # 单个 IP 的数据请求基础频�
 web-icon-request-interval-seconds=3       # 图片基础请求间隔，单位秒
 web-ranking-refresh-interval-seconds=30   # 网页排行榜整体刷新间隔，单位秒
 server-name=auto                           # 网页显示的服务器名；auto 自动读取
+web-switcher-name=auto                     # 左侧服务器切换按钮名称；auto 使用网页服务器名
+web-switcher-weight=100                    # 显示权重；越小越靠前，1 最先显示
+web-switcher-peers=                        # 其他 RankBoard 地址，逗号分隔；省略端口时沿用当前网页端口
 website-icon=server-icon.png              # 服务器图标；只能放在 config/rankboard/
 web-theme-follow-icon=true                # 默认从左上角图标自动取色
 web-theme-base=auto                       # 开服图标取色后自动写入，也可填写 #RRGGBB
@@ -183,6 +186,8 @@ web-theme-border=auto                     # 边框色；可填写 #RRGGBB
 ```
 
 `website-icon` 优先读取 `config/rankboard/` 目录内的文件；默认图标不存在时回退到服务端根目录的 `server-icon.png`。绝对路径、越界路径和目录外符号链接都会被拒绝。可用 `/leaderboard webtheme icon` 启用图标取色、`/leaderboard webtheme blue` 恢复默认蓝色系，或 `/leaderboard webtheme rgb #3F505E` 生成自定义 RGB 色系。
+
+多个 RankBoard 网页可通过 `/leaderboard webswitch add <IP|域名|网址>` 加入左侧切换列表。地址未写端口时使用当前网页端口；相同 IP 和端口会自动合并。使用 `/leaderboard webswitch name <名称|auto>` 设置本服按钮名称，使用 `/leaderboard webswitch weight <1-10000>` 设置顺序，权重 `1` 最先显示。
 
 ### RankBoard 白名单
 
@@ -402,6 +407,9 @@ web-data-requests-per-second=1            # Per-IP base rate for data requests
 web-icon-request-interval-seconds=3       # Base image request interval in seconds
 web-ranking-refresh-interval-seconds=30   # Full ranking refresh interval in seconds
 server-name=auto                           # Server name shown on the web page; auto reads server data
+web-switcher-name=auto                     # Name shown in the left-side server switcher
+web-switcher-weight=100                    # Lower values sort first; weight 1 is first
+web-switcher-peers=                        # Other RankBoard addresses, comma-separated; omitted ports inherit the local web port
 website-icon=server-icon.png              # Server icon, restricted to config/rankboard/
 web-theme-follow-icon=true                # Derive the default palette from the website icon
 web-theme-base=auto                       # Persisted from the icon at startup; also accepts #RRGGBB
@@ -416,6 +424,8 @@ web-theme-border=auto                     # Border color; accepts #RRGGBB
 Set `website-button-enabled=false` with `/leaderboard config set website-button-enabled false` to hide the website button from the menu and Help. Set it back to `true` to restore it.
 
 `website-icon` first reads from `config/rankboard/`; when the default icon is missing it falls back to `server-icon.png` in the server root. Absolute paths, traversal paths, and escaping symlinks are rejected. Use `/leaderboard webtheme icon` for icon-derived colors, `/leaderboard webtheme blue` for the default blue palette, or `/leaderboard webtheme rgb #3F505E` for a custom RGB palette.
+
+Add RankBoard sites to the left-side switcher with `/leaderboard webswitch add <IP|host|URL>`. Addresses without a port inherit the current web port, and entries resolving to the same IP and port are merged. Set this server's button with `/leaderboard webswitch name <name|auto>` and order it with `/leaderboard webswitch weight <1-10000>`; weight `1` sorts first.
 
 ### RankBoard Whitelist
 

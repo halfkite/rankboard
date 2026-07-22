@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ExternalLink, Github, PackageOpen } from "lucide-react";
+import { ExternalLink, Github, PackageOpen, Server } from "lucide-react";
 import BlurText from "@/components/BlurText/BlurText";
 
 type Metric = {
@@ -52,6 +52,14 @@ type SiteTheme = {
   followIcon: boolean;
   base: string;
   colors: ThemeColors;
+};
+
+type SiteLink = {
+  name: string;
+  url: string;
+  weight: number;
+  current: boolean;
+  online: boolean;
 };
 
 const defaultTheme: SiteTheme = {
@@ -202,6 +210,7 @@ export default function App() {
   const [ranking, setRanking] = useState<RankingResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sites, setSites] = useState<SiteLink[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -287,6 +296,22 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    const loadSites = () => fetch("/api/sites")
+      .then((response) => response.ok ? response.json() as Promise<{ sites?: SiteLink[] }> : null)
+      .then((payload) => {
+        if (!cancelled && payload?.sites) setSites(payload.sites);
+      })
+      .catch(() => undefined);
+    loadSites();
+    const interval = window.setInterval(loadSites, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!iconVersion || iconVersion === "none") return;
     let cancelled = false;
     let objectUrl: string | null = null;
@@ -352,6 +377,26 @@ export default function App() {
 
       <main className="workspace">
         <aside className="sidebar glass">
+          {sites.length > 1 && (
+            <section className="server-switcher">
+              <p className="section-label">服务器切换</p>
+              <div className="server-list">
+                {sites.map((site) => (
+                  <button
+                    key={`${site.url}-${site.weight}`}
+                    className={site.current ? "selected" : ""}
+                    disabled={site.current || !site.online}
+                    title={site.online ? site.url : `${site.url}（离线）`}
+                    onClick={() => window.location.assign(site.url)}
+                  >
+                    <Server aria-hidden="true" />
+                    <span>{site.name}</span>
+                    <small>{site.current ? "当前" : site.online ? "切换" : "离线"}</small>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
           <section>
             <p className="section-label">统计周期</p>
             <div className="period-list">

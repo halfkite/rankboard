@@ -49,3 +49,8 @@ Thumbs.db
 *.jar.pending*
 *.disabled
 *.disabled-*
+
+# Log files
+*.log
+*.stdout.log
+*.stderr.log

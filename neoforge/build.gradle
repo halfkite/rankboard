@@ -1,0 +1,208 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.142'
+}
+
+version = "${mod_version}+neoforge+mc${minecraft_version}+${new Date().format('yyMMddHHmm', TimeZone.getTimeZone('Asia/Shanghai'))}"
+group = mod_group_id
+
+base { archivesName = 'rankboard' }
+
+def minecraftVersionParts = minecraft_version.tokenize('.').collect { it as int }
+def usesMojangNames = minecraftVersionParts[0] >= 26
+def usesModernApi = minecraftVersionParts[0] >= 26 ||
+        (minecraftVersionParts[0] == 1 && minecraftVersionParts[1] == 21 &&
+                minecraftVersionParts.size() > 2 && minecraftVersionParts[2] >= 5)
+def usesLatePlayerApi = minecraftVersionParts[0] >= 26 ||
+        (minecraftVersionParts[0] == 1 && minecraftVersionParts[1] == 21 &&
+                minecraftVersionParts.size() > 2 && minecraftVersionParts[2] >= 9)
+def usesLatestApi = minecraftVersionParts[0] >= 26 ||
+        (minecraftVersionParts[0] == 1 && minecraftVersionParts[1] == 21 &&
+                minecraftVersionParts.size() > 2 && minecraftVersionParts[2] >= 11)
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(usesMojangNames ? 25 : 21)
+
+neoForge {
+    version = project.neo_version
+    if (project.parchment_mappings_version != 'none') {
+        parchment {
+            minecraftVersion = project.parchment_minecraft_version
+            mappingsVersion = project.parchment_mappings_version
+        }
+    }
+    runs {
+        server {
+            server()
+            programArgument '--nogui'
+            gameDirectory = layout.buildDirectory.dir('run-server').get().asFile
+        }
+    }
+    mods {
+        rankboard { sourceSet(sourceSets.main) }
+    }
+}
+
+def generatedJava = layout.buildDirectory.dir('generated/sources/rankboardNeoForge/java')
+
+tasks.register('generateNeoForgeSources') {
+    inputs.dir('../src/mojmap/java')
+    inputs.property('minecraftVersion', minecraft_version)
+    inputs.property('usesMojangNames', usesMojangNames)
+    inputs.property('usesModernApi', usesModernApi)
+    inputs.property('usesLatePlayerApi', usesLatePlayerApi)
+    inputs.property('usesLatestApi', usesLatestApi)
+    outputs.dir(generatedJava)
+    doLast {
+        def sourceRoot = file('../src/mojmap/java')
+        def outputRoot = generatedJava.get().asFile
+        delete outputRoot
+        sourceRoot.eachFileRecurse { source ->
+            if (!source.isFile() || !source.name.endsWith('.java')) return
+            def relative = sourceRoot.toPath().relativize(source.toPath()).toString()
+            def normalizedRelative = relative.replace('\\', '/')
+            if (normalizedRelative in [
+                    'cn/bamgdam/rankboard/LatePlayerDirectoryCompat.java',
+                    'cn/bamgdam/rankboard/LatestCommandPermissionCompat.java',
+                    'cn/bamgdam/rankboard/LatestPersistentStateCompat.java',
+                    'cn/bamgdam/rankboard/ModernNbtCompat.java',
+                    'cn/bamgdam/rankboard/ModernTextCompat.java']) return
+            def target = new File(outputRoot, relative)
+            target.parentFile.mkdirs()
+            def text = source.getText('UTF-8').replace('\r\n', '\n')
+            if (normalizedRelative == 'cn/bamgdam/rankboard/RankBoardMod.java') {
+                text = text.replace('import net.fabricmc.api.ModInitializer;\n', '')
+                        .replace('import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;\n', '')
+                        .replace('import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;\n', '')
+                        .replace('import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;\n', '')
+                        .replace('import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;\n', '')
+                text = text.replace('import org.slf4j.Logger;', '''import net.minecraft.server.MinecraftServer;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import org.slf4j.Logger;''')
+                text = text.replace('public final class RankBoardMod implements ModInitializer {', '@Mod(RankBoardMod.MOD_ID)\npublic final class RankBoardMod {')
+                def lifecycleStart = text.indexOf('    @Override\n    public void onInitialize()')
+                def commandsStart = text.indexOf('    private void registerCommands(', lifecycleStart)
+                if (lifecycleStart < 0 || commandsStart < 0) throw new GradleException('Could not locate Fabric lifecycle block')
+                def lifecycle = '''    public RankBoardMod() {
+        LOGGER.info("RankBoard NeoForge initialized for Minecraft 1.21.1");
+        NeoForge.EVENT_BUS.addListener(this::registerCommands);
+        NeoForge.EVENT_BUS.addListener(this::onServerStarted);
+        NeoForge.EVENT_BUS.addListener(this::onServerStopped);
+        NeoForge.EVENT_BUS.addListener(this::onPlayerJoin);
+        NeoForge.EVENT_BUS.addListener(this::onPlayerLogout);
+        NeoForge.EVENT_BUS.addListener(this::onServerTick);
+    }
+
+    private void onServerStarted(ServerStartedEvent event) {
+        MinecraftServer server = event.getServer();
+        RankBoardConfig.load(server);
+        RankBoardWhitelist.load(server);
+        BoardService.enforceForeignScoreboardPolicy(server);
+        StatReader.startWarmup(server);
+        WebDashboard.start(server);
+    }
+
+    private void onServerStopped(ServerStoppedEvent event) {
+        MinecraftServer server = event.getServer();
+        PlayerNameColors.clear(server);
+        BoardService.clearSessions();
+        WebDashboard.stop();
+        StatReader.stopWarmup();
+        LOOK_MENU_HELD.clear();
+    }
+
+    private void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        MinecraftServer server = PlayerCompat.server(player);
+        LeaderboardState.get(server).ensurePlayer(player);
+        AvatarCache.cacheOnJoin(server, player);
+        BoardService.restore(player);
+        sendJoinExperience(player);
+    }
+
+    private void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        MinecraftServer server = PlayerCompat.server(player);
+        StatReader.capturePlayer(server, player);
+        StatReader.reloadPlayer(server, player.getUUID());
+        LOOK_MENU_HELD.remove(player.getUUID());
+        BoardService.disconnect(player);
+    }
+
+    private void onServerTick(ServerTickEvent.Post event) {
+        MinecraftServer server = event.getServer();
+        BoardService.tickCarousel(server);
+        BoardService.tickActivity(server);
+        handleLookUpSneakMenu(server);
+        if (++ticks >= REFRESH_INTERVAL_TICKS) {
+            ticks = 0;
+            LeaderboardState.get(server).rollPeriods(server);
+            BoardService.refreshAll(server);
+            BoardService.enforceForeignScoreboardPolicy(server);
+        }
+    }
+
+'''
+                text = text.substring(0, lifecycleStart) + lifecycle + text.substring(commandsStart)
+                text = text.replace('RankBoard NeoForge initialized for Minecraft 1.21.1',
+                        "RankBoard NeoForge initialized for Minecraft ${minecraft_version}")
+                text = text.replaceFirst(/private void registerCommands\([^\{]+\) \{/, '''private void registerCommands(RegisterCommandsEvent event) {
+        var dispatcher = event.getDispatcher();
+        CommandBuildContext registryAccess = event.getBuildContext();
+        Commands.CommandSelection environment = event.getCommandSelection();''')
+                if (!usesLatestApi) {
+                    text = text.replace('net.minecraft.resources.Identifier', 'net.minecraft.resources.ResourceLocation')
+                }
+            } else if (normalizedRelative == 'cn/bamgdam/rankboard/AvatarCache.java') {
+                if (!usesLatePlayerApi) {
+                    text = text.replace('getGameProfile().properties()', 'getGameProfile().getProperties()')
+                }
+            } else if (normalizedRelative == 'cn/bamgdam/rankboard/LeaderboardState.java' && !usesModernApi) {
+                text = text.replace('public CompoundTag writeNbt(CompoundTag nbt, HolderLookup.Provider lookup)',
+                        '@Override public CompoundTag save(CompoundTag nbt, HolderLookup.Provider lookup)')
+            }
+            target.setText(text, 'UTF-8')
+        }
+    }
+}
+
+sourceSets.main.java.setSrcDirs([
+        generatedJava,
+        'src/main/java',
+        usesModernApi ? 'src/modern-common/java' : 'src/legacy/java',
+        usesModernApi ? (usesMojangNames ? 'src/modern-26/java' : 'src/modern-pre26/java') : null,
+        usesLatePlayerApi ? 'src/late-player/java' : 'src/early-player/java',
+        usesLatestApi ? 'src/latest/java' : 'src/pre-latest/java'
+].findAll { it != null })
+tasks.named('compileJava').configure { dependsOn 'generateNeoForgeSources' }
+
+def npmExecutable = System.getProperty('os.name').toLowerCase().contains('windows') ? 'npm.cmd' : 'npm'
+tasks.register('webBuild', Exec) {
+    workingDir '../web'
+    commandLine npmExecutable, 'run', 'build'
+}
+
+def generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
+    def values = [minecraft_version: minecraft_version, minecraft_version_range: minecraft_version_range,
+                  neo_version: neo_version, loader_version_range: loader_version_range,
+                  mod_id: mod_id, mod_name: mod_name, mod_license: mod_license, mod_version: mod_version]
+    inputs.properties values
+    expand values
+    from 'src/main/templates'
+    into layout.buildDirectory.dir('generated/sources/modMetadata')
+}
+
+sourceSets.main.resources.srcDir generateModMetadata
+sourceSets.main.resources.srcDir('../src/main/resources')
+processResources {
+    dependsOn webBuild
+    exclude 'fabric.mod.json'
+    from('../web/dist') { into 'rankboard-web' }
+}
+
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }

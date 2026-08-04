@@ -22,7 +22,7 @@ repositories {
 
 def versionParts = project.minecraft_version.tokenize('.').collect { it as int }
 def usesModernApi = versionParts[0] >= 26 || (versionParts[0] == 1 && versionParts[1] == 21 && versionParts.size() > 2 && versionParts[2] >= 5)
-def usesLateApi = versionParts[0] >= 26 || (versionParts[0] == 1 && versionParts[1] == 21 && versionParts.size() > 2 && versionParts[2] >= 10)
+def usesLateApi = versionParts[0] >= 26 || (versionParts[0] == 1 && versionParts[1] == 21 && versionParts.size() > 2 && versionParts[2] >= 9)
 def usesLatestApi = versionParts[0] >= 26 || (versionParts[0] == 1 && versionParts[1] == 21 && versionParts.size() > 2 && versionParts[2] >= 11)
 
 sourceSets.main.java {

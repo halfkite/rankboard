@@ -1,25 +1,38 @@
-
 package cn.bamgdam.rankboard;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import net.minecraft.server.MinecraftServer;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
+import java.net.InetAddress;
+import java.net.URI;
 import java.net.URLDecoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
+import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
@@ -35,11 +48,20 @@ final class WebDashboard {
     private static MinecraftServer minecraft;
     private static String serverName = "Minecraft Server";
     private static Path websiteIcon;
-
-    static boolean isRunning() { return true; }
+    private static byte[] websiteIconBytes;
+    private static String websiteIconContentType = "application/octet-stream";
+    private static String websiteIconVersion = "none";
     private static int dataRequestsPerSecond = 1;
     private static int iconRequestIntervalSeconds = 3;
     private static int rankingRefreshIntervalSeconds = 30;
+    private static int webPort = 8765;
+    private static String switcherName = "Minecraft Server";
+    private static int switcherWeight = 100;
+    private static List<String> switcherPeers = List.of();
+    private static Properties webTheme = new Properties();
+    private static final HttpClient PEER_CLIENT = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofMillis(800)).followRedirects(HttpClient.Redirect.NEVER).build();
+    private static final Map<String, PeerSnapshot> PEER_SNAPSHOTS = new ConcurrentHashMap<>();
     private static final Map<String, RequestWindow> REQUEST_WINDOWS = new ConcurrentHashMap<>();
     private static final Map<String, CachedRanking> RANKING_CACHE = new ConcurrentHashMap<>();
     private static final Map<String, BurstPenaltyWindow> BURST_PENALTIES = new ConcurrentHashMap<>();
@@ -55,6 +77,8 @@ final class WebDashboard {
     private static final AtomicLong LAST_CLEANUP = new AtomicLong();
     private WebDashboard() { }
 
+    static boolean isRunning() { return http != null; }
+
     static synchronized void start(MinecraftServer server) {
         if (http != null) return;
         minecraft = server;
@@ -62,14 +86,27 @@ final class WebDashboard {
             Properties config = RankBoardConfig.loadWeb(server);
             String host = config.getProperty("host", "0.0.0.0");
             int port = Integer.parseInt(config.getProperty("port", "8765"));
+            webPort = port;
             dataRequestsPerSecond = Integer.parseInt(config.getProperty("web-data-requests-per-second", "1"));
             iconRequestIntervalSeconds = Integer.parseInt(config.getProperty("web-icon-request-interval-seconds", "3"));
             rankingRefreshIntervalSeconds = Integer.parseInt(config.getProperty("web-ranking-refresh-interval-seconds", "30"));
             serverName = resolveServerName(server, config.getProperty("server-name", "auto"));
+            String configuredSwitcherName = config.getProperty("web-switcher-name", "auto").strip();
+            switcherName = configuredSwitcherName.equalsIgnoreCase("auto") || configuredSwitcherName.isEmpty()
+                    ? serverName : configuredSwitcherName;
+            switcherWeight = Integer.parseInt(config.getProperty("web-switcher-weight", "100"));
+            switcherPeers = parsePeers(config.getProperty("web-switcher-peers", ""));
             websiteIcon = resolveIcon(server, config.getProperty("website-icon", "server-icon.png"));
+            loadWebsiteIcon(websiteIcon);
+            persistDetectedThemeBase(server, config, websiteIcon);
+            webTheme = new Properties();
+            for (String key : config.stringPropertyNames()) {
+                if (key.startsWith("web-theme-")) webTheme.setProperty(key, config.getProperty(key));
+            }
             http = HttpServer.create(new InetSocketAddress(host, port), 0);
             http.createContext("/api/rankings", WebDashboard::rankings);
             http.createContext("/api/site", WebDashboard::site);
+            http.createContext("/api/sites", WebDashboard::sites);
             http.createContext("/site-icon", WebDashboard::siteIcon);
             http.createContext("/avatar/", WebDashboard::avatar);
             http.createContext("/", WebDashboard::webAsset);
@@ -91,6 +128,12 @@ final class WebDashboard {
         http = null;
         minecraft = null;
         websiteIcon = null;
+        websiteIconBytes = null;
+        websiteIconContentType = "application/octet-stream";
+        websiteIconVersion = "none";
+        webTheme = new Properties();
+        switcherPeers = List.of();
+        PEER_SNAPSHOTS.clear();
         REQUEST_WINDOWS.clear();
         BURST_PENALTIES.clear();
         RANKING_CACHE.clear();
@@ -115,7 +158,8 @@ final class WebDashboard {
 
     private static Path resolveIcon(MinecraftServer server, String configuredPath) {
         Path iconDirectory = RankBoardConfig.configDirectory(server).toAbsolutePath().normalize();
-        Path fallback = iconDirectory.resolve("server-icon.png").normalize();
+        Path configFallback = iconDirectory.resolve("server-icon.png").normalize();
+        Path serverFallback = server.getServerDirectory().resolve("server-icon.png").toAbsolutePath().normalize();
         String raw = configuredPath == null ? "" : configuredPath.strip();
         try {
             Path requested = Path.of(raw);
@@ -128,11 +172,71 @@ final class WebDashboard {
                 if (realCandidate.startsWith(realDirectory)) return realCandidate;
                 throw new IllegalArgumentException("symbolic link escapes config directory");
             }
-            RankBoardMod.LOGGER.warn("Website icon {} was not found in {}; falling back to {}", raw, iconDirectory, fallback);
+            if (Files.isRegularFile(configFallback)) return configFallback.toRealPath();
+            if (Files.isRegularFile(serverFallback)) return serverFallback.toRealPath();
+            RankBoardMod.LOGGER.warn("Website icon {} was not found; checked {} and {}", raw, configFallback, serverFallback);
         } catch (IOException | RuntimeException exception) {
             RankBoardMod.LOGGER.warn("Website icon {} is invalid; only files inside {} are allowed", raw, iconDirectory);
         }
-        return fallback;
+        return Files.isRegularFile(configFallback) ? configFallback : serverFallback;
+    }
+
+    private static void persistDetectedThemeBase(MinecraftServer server, Properties config, Path icon) {
+        if (!Boolean.parseBoolean(config.getProperty("web-theme-follow-icon", "true"))) return;
+        String detected = detectIconColor(icon);
+        if (detected == null || detected.equalsIgnoreCase(config.getProperty("web-theme-base", "auto"))) return;
+        try {
+            String saved = RankBoardConfig.set(server, "web-theme-base", detected);
+            config.setProperty("web-theme-base", saved);
+            RankBoardMod.LOGGER.info("Detected website theme base {} from {}", saved, icon);
+        } catch (IOException | IllegalArgumentException exception) {
+            RankBoardMod.LOGGER.warn("Could not persist website theme color detected from {}", icon, exception);
+        }
+    }
+
+    private static void loadWebsiteIcon(Path icon) throws IOException {
+        if (icon == null || !Files.isRegularFile(icon)) {
+            websiteIconBytes = null;
+            websiteIconContentType = "application/octet-stream";
+            websiteIconVersion = "none";
+            return;
+        }
+        websiteIconBytes = Files.readAllBytes(icon);
+        String type = Files.probeContentType(icon);
+        websiteIconContentType = type == null ? "application/octet-stream" : type;
+        try {
+            websiteIconVersion = HexFormat.of().formatHex(
+                    MessageDigest.getInstance("SHA-256").digest(websiteIconBytes));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
+    }
+
+    private static String detectIconColor(Path icon) {
+        if (icon == null || !Files.isRegularFile(icon)) return null;
+        try {
+            BufferedImage image = ImageIO.read(icon.toFile());
+            if (image == null) return null;
+            long red = 0L, green = 0L, blue = 0L, count = 0L;
+            int stepX = Math.max(1, image.getWidth() / 64);
+            int stepY = Math.max(1, image.getHeight() / 64);
+            for (int y = 0; y < image.getHeight(); y += stepY) {
+                for (int x = 0; x < image.getWidth(); x += stepX) {
+                    int argb = image.getRGB(x, y);
+                    if (((argb >>> 24) & 0xFF) < 48) continue;
+                    red += (argb >>> 16) & 0xFF;
+                    green += (argb >>> 8) & 0xFF;
+                    blue += argb & 0xFF;
+                    count++;
+                }
+            }
+            if (count == 0L) return null;
+            return String.format(java.util.Locale.ROOT, "#%02X%02X%02X",
+                    red / count, green / count, blue / count);
+        } catch (IOException | RuntimeException exception) {
+            RankBoardMod.LOGGER.warn("Could not read website icon color from {}", icon, exception);
+            return null;
+        }
     }
 
     private static String resolveServerName(MinecraftServer server, String configuredName) {
@@ -202,15 +306,18 @@ final class WebDashboard {
     private static String buildRanking(MinecraftServer server, String period, LocalDate from, LocalDate to,
                                        RankBoardMod.Metric metric, boolean requestOnlineOnly) {
         LeaderboardState state = LeaderboardState.get(server);
+        if (!state.isMetricDisplayEnabled(metric)) {
+            throw new IllegalArgumentException(metric.label() + " 已被 OP 禁止显示");
+        }
         boolean effectiveOnlineOnly = requestOnlineOnly || state.isOnlineOnly();
+        boolean scanning = !StatReader.isReady();
         List<WebEntry> entries = new ArrayList<>();
         String actualStart;
         String actualEnd;
-        boolean complete = StatReader.isReady();
-        List<String> warnings = new ArrayList<>();
-        if (!StatReader.isReady()) {
-            warnings.add("权威扫描进行中（" + StatReader.progress() + "），当前为缓存预览");
-        }
+        boolean complete = !scanning;
+        List<String> warnings = scanning
+                ? new ArrayList<>(List.of("权威扫描进行中（" + StatReader.progress() + "），当前为缓存预览"))
+                : new ArrayList<>();
         if (period.equals("all")) {
             StatReader.readAll(server, metric).forEach(snapshot -> {
                 if (isIncluded(server, state, snapshot.uuid(), snapshot.name(), effectiveOnlineOnly)) {
@@ -220,7 +327,7 @@ final class WebDashboard {
             actualStart = "原版统计起始";
             actualEnd = LocalDate.now().toString();
         } else {
-            LeaderboardState.RangeData range = state.range(server, from, to, metric, true);
+            LeaderboardState.RangeData range = state.range(server, from, to, metric);
             complete = complete && range.complete();
             warnings.addAll(range.warnings());
             Map<UUID, String> names = new HashMap<>();
@@ -276,8 +383,145 @@ final class WebDashboard {
         if (!enforceRateLimit(exchange, RequestKind.API_DATA)) return;
         JsonObject root = new JsonObject();
         root.addProperty("name", serverName);
+        root.addProperty("switcherName", switcherName);
+        root.addProperty("switcherWeight", switcherWeight);
         root.addProperty("rankingRefreshIntervalSeconds", rankingRefreshIntervalSeconds);
+        root.addProperty("themeFollowIcon", Boolean.parseBoolean(
+                webTheme.getProperty("web-theme-follow-icon", "true")));
+        root.addProperty("themeBase", webTheme.getProperty("web-theme-base", "auto"));
+        root.addProperty("iconVersion", websiteIconVersion);
+        JsonObject theme = new JsonObject();
+        for (String name : List.of("background", "surface", "primary", "secondary", "text", "muted",
+                "border", "success", "danger")) {
+            theme.addProperty(name, webTheme.getProperty("web-theme-" + name, "auto"));
+        }
+        root.add("theme", theme);
+        JsonArray metrics = new JsonArray();
+        MinecraftServer server = minecraft;
+        LeaderboardState state = server == null ? null : LeaderboardState.get(server);
+        for (RankBoardMod.Metric metric : RankBoardMod.Metric.values()) {
+            if (state != null && !state.isMetricDisplayEnabled(metric)) continue;
+            JsonObject item = new JsonObject();
+            item.addProperty("id", metric.command);
+            item.addProperty("label", metric.label());
+            metrics.add(item);
+        }
+        root.add("metrics", metrics);
         respond(exchange, 200, "application/json; charset=utf-8", root.toString());
+    }
+
+    private static void sites(HttpExchange exchange) throws IOException {
+        if (!enforceRateLimit(exchange, RequestKind.API_DATA)) return;
+        String currentUrl = currentOrigin(exchange);
+        LinkedHashMap<String, SiteEntry> unique = new LinkedHashMap<>();
+        SiteEntry current = new SiteEntry(switcherName, currentUrl, switcherWeight, true, true);
+        unique.put(endpointKey(currentUrl), current);
+
+        List<CompletableFuture<SiteEntry>> pending = new ArrayList<>();
+        for (String raw : switcherPeers) {
+            String url = normalizePeer(raw);
+            if (url == null) continue;
+            String key = endpointKey(url);
+            if (unique.containsKey(key)) continue;
+            unique.put(key, null);
+            pending.add(fetchPeer(url));
+        }
+        try {
+            CompletableFuture.allOf(pending.toArray(CompletableFuture[]::new)).get(2, TimeUnit.SECONDS);
+        } catch (Exception ignored) { }
+        for (CompletableFuture<SiteEntry> future : pending) {
+            SiteEntry entry = future.getNow(null);
+            if (entry != null) unique.put(endpointKey(entry.url), entry);
+        }
+        List<SiteEntry> entries = unique.values().stream().filter(java.util.Objects::nonNull)
+                .sorted(Comparator.comparingInt(SiteEntry::weight)
+                        .thenComparing(SiteEntry::name, String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(SiteEntry::url))
+                .toList();
+        JsonArray sites = new JsonArray();
+        for (SiteEntry entry : entries) {
+            JsonObject item = new JsonObject();
+            item.addProperty("name", entry.name);
+            item.addProperty("url", entry.url);
+            item.addProperty("weight", entry.weight);
+            item.addProperty("current", entry.current);
+            item.addProperty("online", entry.online);
+            sites.add(item);
+        }
+        JsonObject root = new JsonObject();
+        root.add("sites", sites);
+        respond(exchange, 200, "application/json; charset=utf-8", root.toString());
+    }
+
+    private static CompletableFuture<SiteEntry> fetchPeer(String url) {
+        long now = System.currentTimeMillis();
+        PeerSnapshot cached = PEER_SNAPSHOTS.get(url);
+        if (cached != null && now - cached.checkedAt < 15_000L) {
+            return CompletableFuture.completedFuture(
+                    new SiteEntry(cached.name, url, cached.weight, false, cached.online));
+        }
+        HttpRequest request = HttpRequest.newBuilder(URI.create(url + "/api/site"))
+                .timeout(Duration.ofMillis(1500)).GET().build();
+        return PEER_CLIENT.sendAsync(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
+                .thenApply(response -> {
+                    if (response.statusCode() != 200) throw new IllegalStateException("HTTP " + response.statusCode());
+                    JsonObject json = JsonParser.parseString(response.body()).getAsJsonObject();
+                    String name = json.has("switcherName") ? json.get("switcherName").getAsString()
+                            : json.has("name") ? json.get("name").getAsString() : url;
+                    int weight = json.has("switcherWeight") ? json.get("switcherWeight").getAsInt() : 100;
+                    PeerSnapshot snapshot = new PeerSnapshot(name, weight, true, System.currentTimeMillis());
+                    PEER_SNAPSHOTS.put(url, snapshot);
+                    return new SiteEntry(name, url, weight, false, true);
+                }).exceptionally(exception -> {
+                    PeerSnapshot previous = PEER_SNAPSHOTS.get(url);
+                    PeerSnapshot offline = new PeerSnapshot(previous == null ? url : previous.name,
+                            previous == null ? 10000 : previous.weight, false, System.currentTimeMillis());
+                    PEER_SNAPSHOTS.put(url, offline);
+                    return new SiteEntry(offline.name, url, offline.weight, false, false);
+                });
+    }
+
+    private static List<String> parsePeers(String configured) {
+        if (configured == null || configured.isBlank()) return List.of();
+        return java.util.Arrays.stream(configured.split(",")).map(String::strip)
+                .filter(value -> !value.isEmpty()).limit(64).toList();
+    }
+
+    private static String normalizePeer(String raw) {
+        try {
+            String value = raw.contains("://") ? raw : "http://" + raw;
+            URI uri = URI.create(value);
+            if (!(uri.getScheme().equalsIgnoreCase("http") || uri.getScheme().equalsIgnoreCase("https"))
+                    || uri.getHost() == null || uri.getUserInfo() != null
+                    || (uri.getPath() != null && !uri.getPath().isBlank() && !uri.getPath().equals("/"))
+                    || uri.getQuery() != null || uri.getFragment() != null) return null;
+            int port = uri.getPort() < 0 ? webPort : uri.getPort();
+            String host = uri.getHost().contains(":") ? "[" + uri.getHost() + "]" : uri.getHost();
+            return uri.getScheme().toLowerCase(java.util.Locale.ROOT) + "://" + host + ":" + port;
+        } catch (RuntimeException exception) {
+            RankBoardMod.LOGGER.warn("Ignoring invalid RankBoard peer address {}", raw);
+            return null;
+        }
+    }
+
+    private static String currentOrigin(HttpExchange exchange) {
+        String host = exchange.getRequestHeaders().getFirst("Host");
+        if (host == null || host.isBlank()) host = "127.0.0.1:" + webPort;
+        if (!host.matches(".*:\\d+$") && !host.startsWith("[")) host += ":" + webPort;
+        return "http://" + host;
+    }
+
+    private static String endpointKey(String url) {
+        try {
+            URI uri = URI.create(url);
+            int port = uri.getPort() < 0 ? webPort : uri.getPort();
+            String address;
+            try { address = InetAddress.getByName(uri.getHost()).getHostAddress(); }
+            catch (IOException exception) { address = uri.getHost().toLowerCase(java.util.Locale.ROOT); }
+            return address + ":" + port;
+        } catch (RuntimeException exception) {
+            return url.toLowerCase(java.util.Locale.ROOT);
+        }
     }
 
     private static RankBoardMod.Metric metric(String command) {
@@ -309,13 +553,18 @@ final class WebDashboard {
     }
 
     private static void siteIcon(HttpExchange exchange) throws IOException {
+        String etag = '"' + websiteIconVersion + '"';
+        exchange.getResponseHeaders().set("Cache-Control", "public, max-age=31536000, immutable");
+        exchange.getResponseHeaders().set("ETag", etag);
+        if (etag.equals(exchange.getRequestHeaders().getFirst("If-None-Match"))) {
+            exchange.sendResponseHeaders(304, -1);
+            exchange.close();
+            return;
+        }
         if (!enforceRateLimit(exchange, RequestKind.ICON)) return;
-        Path icon = websiteIcon;
-        if (icon == null || !Files.isRegularFile(icon)) { respond(exchange, 404, "text/plain", "Not found"); return; }
-        byte[] bytes = Files.readAllBytes(icon);
-        String contentType = Files.probeContentType(icon);
-        exchange.getResponseHeaders().set("Content-Type", contentType == null ? "application/octet-stream" : contentType);
-        exchange.getResponseHeaders().set("Cache-Control", "no-cache");
+        byte[] bytes = websiteIconBytes;
+        if (bytes == null) { respond(exchange, 404, "text/plain", "Not found"); return; }
+        exchange.getResponseHeaders().set("Content-Type", websiteIconContentType);
         exchange.sendResponseHeaders(200, bytes.length);
         try (var output = exchange.getResponseBody()) { output.write(bytes); }
     }
@@ -383,21 +632,18 @@ final class WebDashboard {
 
     private static boolean enforceRateLimit(HttpExchange exchange, RequestKind requestKind) throws IOException {
         long now = System.currentTimeMillis();
-        maybeCleanup(now);
+        maybeCleanupBurst(now);
         String address = exchange.getRemoteAddress().getAddress().getHostAddress();
         BurstPenalty penalty = recordBurst(address, requestKind, now);
         long windowMillis = requestIntervalMillis(requestKind, penalty.active);
         int limit = requestKind == RequestKind.API_DATA && !penalty.active ? dataRequestsPerSecond : 1;
         String resource = normalizedRateResource(exchange.getRequestURI().getPath());
-        String key = address + '\n' + requestKind + '\n' + resource;
-        RequestWindow window = REQUEST_WINDOWS.get(key);
-        if (window == null) {
-            if (REQUEST_WINDOWS.size() >= MAX_TRACKED_WINDOWS) cleanupRequestWindows(now);
-            if (REQUEST_WINDOWS.size() >= MAX_TRACKED_WINDOWS) {
-                return rateLimited(exchange, requestKind, limit, Math.max(1, windowMillis / 1000));
-            }
-            window = REQUEST_WINDOWS.computeIfAbsent(key, ignored -> new RequestWindow());
+        String key = "burst\n" + address + '\n' + requestKind + '\n' + resource;
+        if (REQUEST_WINDOWS.size() >= MAX_TRACKED_WINDOWS) cleanupRequestWindows(now);
+        if (REQUEST_WINDOWS.size() >= MAX_TRACKED_WINDOWS && !REQUEST_WINDOWS.containsKey(key)) {
+            return rateLimited(exchange, requestKind, limit, Math.max(1, windowMillis / 1000));
         }
+        RequestWindow window = REQUEST_WINDOWS.computeIfAbsent(key, ignored -> new RequestWindow());
         RateDecision decision = window.acquire(now, limit, windowMillis);
         exchange.getResponseHeaders().set("X-RateLimit-Limit", Integer.toString(limit));
         exchange.getResponseHeaders().set("X-RateLimit-Remaining", Integer.toString(decision.remaining));
@@ -405,24 +651,24 @@ final class WebDashboard {
         if (requestKind == RequestKind.API_DATA || requestKind == RequestKind.ICON) {
             exchange.getResponseHeaders().set("X-RateLimit-Burst-Requests", Integer.toString(penalty.requests));
             exchange.getResponseHeaders().set("X-RateLimit-Penalty-Active", Boolean.toString(penalty.active));
-            if (penalty.active) exchange.getResponseHeaders().set("X-RateLimit-Penalty-Until", Long.toString(penalty.until));
+            if (penalty.active) {
+                exchange.getResponseHeaders().set("X-RateLimit-Penalty-Until", Long.toString(penalty.until));
+            }
         }
-        if (decision.allowed) {
-            if (REQUEST_WINDOWS.size() > 10_000) cleanupRequestWindows(now);
-            return true;
-        }
+        if (decision.allowed) return true;
         return rateLimited(exchange, requestKind, limit, decision.retryAfterSeconds);
     }
 
     private static boolean rateLimited(HttpExchange exchange, RequestKind requestKind, int limit,
                                        long retryAfterSeconds) throws IOException {
         exchange.getResponseHeaders().set("Retry-After", Long.toString(retryAfterSeconds));
-        String subject = requestKind == RequestKind.ICON ? "图片" : requestKind == RequestKind.API_DATA ? "数据接口" : "网页资源";
-        String message = "请求过于频繁：每个 IP 对" + subject + "当前最短请求间隔为 "
-                + exchange.getResponseHeaders().getFirst("X-RateLimit-Window") + " 秒。";
-        if ("true".equals(exchange.getResponseHeaders().getFirst("X-RateLimit-Penalty-Active"))) {
-            message += " 已触发 30 分钟高频处罚。";
-        }
+        String message = switch (requestKind) {
+            case API_DATA -> "请求过于频繁：数据请求基础每秒最多 " + dataRequestsPerSecond
+                    + " 次；30 秒内超过 30 次后，30 分钟内每 5 秒最多 1 次。";
+            case ICON -> "请求过于频繁：同一图标基础每 " + iconRequestIntervalSeconds
+                    + " 秒最多 1 次；30 秒内图片请求超过 6 次后，30 分钟内每 15 秒最多 1 次。";
+            case WEB_ASSET -> "请求过于频繁，请在 " + retryAfterSeconds + " 秒后重试。";
+        };
         if (exchange.getRequestURI().getPath().startsWith("/api/")) {
             JsonObject error = new JsonObject();
             error.addProperty("error", message);
@@ -450,33 +696,39 @@ final class WebDashboard {
     }
 
     private static void cleanupRequestWindows(long now) {
-        REQUEST_WINDOWS.entrySet().removeIf(entry -> now - entry.getValue().lastAccess() > PENALTY_DURATION_MILLIS);
-        BURST_PENALTIES.entrySet().removeIf(entry -> now - entry.getValue().lastAccess() > PENALTY_DURATION_MILLIS + BURST_WINDOW_MILLIS);
+        REQUEST_WINDOWS.entrySet().removeIf(
+                entry -> now - entry.getValue().lastAccess() > PENALTY_DURATION_MILLIS + BURST_WINDOW_MILLIS);
     }
 
     private static BurstPenalty recordBurst(String address, RequestKind requestKind, long now) {
         if (requestKind == RequestKind.WEB_ASSET) return BurstPenalty.NONE;
         String key = address + '\n' + requestKind;
-        BurstPenaltyWindow penalty = BURST_PENALTIES.get(key);
-        if (penalty == null) {
-            if (BURST_PENALTIES.size() >= MAX_TRACKED_WINDOWS) cleanupRequestWindows(now);
-            if (BURST_PENALTIES.size() >= MAX_TRACKED_WINDOWS) return BurstPenalty.ACTIVE;
-            penalty = BURST_PENALTIES.computeIfAbsent(key, ignored -> new BurstPenaltyWindow());
+        BurstPenaltyWindow penalty = BURST_PENALTIES.computeIfAbsent(key, ignored -> new BurstPenaltyWindow());
+        return penalty.record(now,
+                requestKind == RequestKind.API_DATA ? DATA_BURST_THRESHOLD : ICON_BURST_THRESHOLD);
+    }
+
+    private static void maybeCleanupBurst(long now) {
+        maybeCleanup(now);
+        BURST_PENALTIES.entrySet().removeIf(
+                entry -> now - entry.getValue().lastAccess() > PENALTY_DURATION_MILLIS + BURST_WINDOW_MILLIS);
+    }
+
+    private static long requestIntervalMillis(RequestKind requestKind, boolean penaltyActive) {
+        if (requestKind == RequestKind.API_DATA) {
+            return penaltyActive ? DATA_PENALTY_INTERVAL_MILLIS : DATA_WINDOW_MILLIS;
         }
-        return penalty.record(now, requestKind == RequestKind.API_DATA ? DATA_BURST_THRESHOLD : ICON_BURST_THRESHOLD);
+        if (requestKind == RequestKind.ICON) {
+            return penaltyActive ? ICON_PENALTY_INTERVAL_MILLIS
+                    : TimeUnit.SECONDS.toMillis(iconRequestIntervalSeconds);
+        }
+        return DATA_WINDOW_MILLIS;
     }
 
     private static void maybeCleanup(long now) {
         long previous = LAST_CLEANUP.get();
         if (now - previous < CLEANUP_INTERVAL_MILLIS || !LAST_CLEANUP.compareAndSet(previous, now)) return;
         cleanupRequestWindows(now);
-    }
-
-    private static long requestIntervalMillis(RequestKind requestKind, boolean penaltyActive) {
-        if (requestKind == RequestKind.API_DATA) return penaltyActive ? DATA_PENALTY_INTERVAL_MILLIS : DATA_WINDOW_MILLIS;
-        if (requestKind == RequestKind.ICON) return penaltyActive
-                ? ICON_PENALTY_INTERVAL_MILLIS : TimeUnit.SECONDS.toMillis(iconRequestIntervalSeconds);
-        return DATA_WINDOW_MILLIS;
     }
 
     private enum RequestKind { API_DATA, WEB_ASSET, ICON }
@@ -499,7 +751,6 @@ final class WebDashboard {
         synchronized long lastAccess() { return lastAccess; }
     }
 
-    /** Per-IP short burst tracker with a fixed-duration penalty. */
     private static final class BurstPenaltyWindow {
         private final ArrayDeque<Long> requests = new ArrayDeque<>();
         private long lastAccess;
@@ -507,9 +758,13 @@ final class WebDashboard {
 
         synchronized BurstPenalty record(long now, int threshold) {
             lastAccess = now;
-            while (!requests.isEmpty() && now - requests.peekFirst() >= BURST_WINDOW_MILLIS) requests.removeFirst();
+            while (!requests.isEmpty() && now - requests.peekFirst() >= BURST_WINDOW_MILLIS) {
+                requests.removeFirst();
+            }
             requests.addLast(now);
-            if (penaltyUntil <= now && requests.size() > threshold) penaltyUntil = now + PENALTY_DURATION_MILLIS;
+            if (penaltyUntil <= now && requests.size() > threshold) {
+                penaltyUntil = now + PENALTY_DURATION_MILLIS;
+            }
             return new BurstPenalty(requests.size(), penaltyUntil > now, penaltyUntil);
         }
 
@@ -520,9 +775,12 @@ final class WebDashboard {
 
     private record CachedRanking(long createdAt, String body) { }
 
+    private record SiteEntry(String name, String url, int weight, boolean current, boolean online) { }
+
+    private record PeerSnapshot(String name, int weight, boolean online, long checkedAt) { }
+
     private record BurstPenalty(int requests, boolean active, long until) {
         private static final BurstPenalty NONE = new BurstPenalty(0, false, 0);
-        private static final BurstPenalty ACTIVE = new BurstPenalty(0, true, Long.MAX_VALUE);
     }
 
     private record WebEntry(UUID uuid, String name, long value) { }
@@ -554,7 +812,7 @@ final class WebDashboard {
             @media(max-width:700px){body{padding-bottom:40px}header{padding:0 16px;gap:9px}.identity{display:grid;gap:1px}.server-name{max-width:150px;font-size:14px}.palette{gap:5px}.palette button{width:22px;height:22px;padding:3px}.palette button span{height:14px}main{padding:16px}.periods{display:grid;grid-template-columns:repeat(3,1fr)}.periods button,.periods button:first-child,.periods button:last-child{border:1px solid var(--line);border-radius:0;padding:0 6px}.controls{grid-template-columns:1fr 1fr}.controls label:first-child{grid-column:1/-1}button{width:100%}.summary{align-items:flex-start;gap:12px}.summary strong{font-size:18px;text-align:right}th:nth-child(3),td:nth-child(3){display:none}td.value{font-size:13px}.mod-links{left:12px;bottom:10px;font-size:11px;gap:6px}}
             </style></head><body><header><img src="/site-icon" onerror="this.style.display='none'" alt=""><div class="identity"><h1>RankBoard</h1><span class="server-name">{{SERVER_NAME}}</span></div><div class="palette" aria-label="网站配色"><button type="button" data-theme="ocean" title="蓝青"><span></span><span></span></button><button type="button" data-theme="violet" title="紫粉"><span></span><span></span></button><button type="button" data-theme="emerald" title="青绿"><span></span><span></span></button><button type="button" data-theme="contrast" title="高对比"><span></span><span></span></button></div></header><main>
             <div class="periods" id="periods" role="group" aria-label="时间范围"><button type="button" data-period="day">最近一日</button><button type="button" data-period="week">最近一周</button><button type="button" data-period="month">最近一月</button><button type="button" data-period="all" class="active">总榜</button><button type="button" data-period="custom">自定义</button></div>
-            <form class="controls" id="form"><label>榜单<select id="metric"><option value="playtime">在线</option><option value="food">食物</option><option value="jumps">跳跃</option><option value="mined">挖掘</option><option value="placed">放置</option><option value="kills">击杀</option><option value="deaths">死亡</option><option value="trades">交易</option><option value="elytra">飞行</option><option value="fishing">钓鱼</option><option value="damage">受伤</option><option value="dropped">丢垃圾</option><option value="picked">拾荒</option><option value="crafted">合成</option><option value="redstone">红石大蛇</option></select></label><label class="date-field hidden">开始日期<input id="from" type="date" required></label><label class="date-field hidden">结束日期<input id="to" type="date" required></label><button>查询</button></form>
+            <form class="controls" id="form"><label>榜单<select id="metric"><option value="playtime">在线时间</option><option value="food">食物</option><option value="jumps">跳跃</option><option value="mined">挖掘</option><option value="placed">放置</option><option value="kills">击杀</option><option value="deaths">死亡</option><option value="trades">交易</option><option value="elytra">鞘翅飞行</option><option value="fishing">钓鱼</option><option value="damage">受到伤害</option><option value="dropped">丢垃圾</option><option value="picked">拾荒</option><option value="crafted">合成</option><option value="redstone">红石大蛇</option></select></label><label class="date-field hidden">开始日期<input id="from" type="date" required></label><label class="date-field hidden">结束日期<input id="to" type="date" required></label><button>查询</button></form>
             <div id="progress" class="muted" hidden></div><div id="error" class="error" hidden></div><section id="result" hidden><div class="summary"><span><b id="title"></b><br><small id="range" class="muted"></small></span><strong id="total"></strong></div><table><thead><tr><th>排名</th><th>玩家</th><th>UUID</th><th style="text-align:right">数值</th></tr></thead><tbody id="rows"></tbody></table></section>
             </main><footer class="mod-links"><span>RankBoard Mod</span><a href="https://modrinth.com/project/rankboard" target="_blank" rel="noopener noreferrer">Modrinth</a><a href="https://github.com/halfkite/rankboard" target="_blank" rel="noopener noreferrer">GitHub</a></footer><script>
             const theme=document.documentElement.dataset.theme||'ocean';document.querySelectorAll('.palette button').forEach(b=>{b.classList.toggle('active',b.dataset.theme===theme);b.addEventListener('click',()=>{document.documentElement.dataset.theme=b.dataset.theme;document.querySelectorAll('.palette button').forEach(x=>x.classList.toggle('active',x===b));try{localStorage.setItem('rankboard-theme',b.dataset.theme)}catch(e){}})});

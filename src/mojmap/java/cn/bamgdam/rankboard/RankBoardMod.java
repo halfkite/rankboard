@@ -140,6 +140,36 @@ public final class RankBoardMod implements ModInitializer {
                         .then(Commands.literal("on").executes(context -> setCarouselColor(context.getSource(), true)))
                         .then(Commands.literal("off").executes(context -> setCarouselColor(context.getSource(), false)))
                         .then(Commands.literal("status").executes(context -> setCarouselColorStatus(context.getSource())))));
+        root.then(Commands.literal("webtheme").requires(source -> CommandPermissionCompat.has(source, 2))
+                .then(Commands.literal("icon").executes(context -> setWebThemeMode(context.getSource(), true)))
+                .then(Commands.literal("blue").executes(context -> setWebThemeMode(context.getSource(), false)))
+                .then(Commands.literal("true").executes(context -> setWebThemeMode(context.getSource(), true)))
+                .then(Commands.literal("false").executes(context -> setWebThemeMode(context.getSource(), false)))
+                .then(Commands.literal("rgb")
+                        .then(Commands.argument("color", StringArgumentType.word())
+                                .executes(context -> setWebThemeRgb(context.getSource(),
+                                        StringArgumentType.getString(context, "color")))))
+                .then(Commands.literal("status").executes(context -> webThemeModeStatus(context.getSource()))));
+        root.then(Commands.literal("webswitch").requires(source -> CommandPermissionCompat.has(source, 2))
+                .executes(context -> webSwitchStatus(context.getSource()))
+                .then(Commands.literal("status").executes(context -> webSwitchStatus(context.getSource())))
+                .then(Commands.literal("list").executes(context -> webSwitchList(context.getSource())))
+                .then(Commands.literal("name")
+                        .then(Commands.argument("name", StringArgumentType.greedyString())
+                                .executes(context -> setConfig(context.getSource(), "web-switcher-name",
+                                        StringArgumentType.getString(context, "name")))))
+                .then(Commands.literal("weight")
+                        .then(Commands.argument("weight", IntegerArgumentType.integer(1, 10000))
+                                .executes(context -> setConfig(context.getSource(), "web-switcher-weight",
+                                        Integer.toString(IntegerArgumentType.getInteger(context, "weight"))))))
+                .then(Commands.literal("add")
+                        .then(Commands.argument("address", StringArgumentType.word())
+                                .executes(context -> modifyWebSwitchPeer(context.getSource(), true,
+                                        StringArgumentType.getString(context, "address")))))
+                .then(Commands.literal("remove")
+                        .then(Commands.argument("address", StringArgumentType.word())
+                                .executes(context -> modifyWebSwitchPeer(context.getSource(), false,
+                                        StringArgumentType.getString(context, "address"))))));
         root.then(Commands.literal("display")
                 .then(Commands.literal("on").executes(context -> BoardService.enable(context.getSource())))
                 .then(Commands.literal("off").executes(context -> BoardService.disable(context.getSource()))
@@ -370,6 +400,10 @@ public final class RankBoardMod implements ModInitializer {
                 }
                 helpCommand(source, "/leaderboard config set web-public-address <地址|auto>", "/leaderboard config set web-public-address ", "设置网站按钮打开的地址，默认 127.0.0.1:8765");
                 helpCommand(source, "/leaderboard config set website-button-enabled <true|false>", "/leaderboard config set website-button-enabled ", "显示或隐藏菜单和帮助中的网站按钮");
+                if (op) helpCommand(source, "/leaderboard webtheme <icon|blue|rgb #RRGGBB|true|false|status>",
+                        "/leaderboard webtheme ", "选择图标自动取色、默认蓝色或 RGB 网页主题");
+                if (op) helpCommand(source, "/leaderboard webswitch <name|weight|add|remove|list|status>",
+                        "/leaderboard webswitch ", "设置左侧服务器切换按钮名称、排序权重和其他网页地址");
                 source.sendSuccess(() -> Component.literal("网页配置：config/rankboard/rankboard-web.properties；可设置 web-public-address。"), false);
             }
             case "admin" -> {
@@ -410,6 +444,10 @@ public final class RankBoardMod implements ModInitializer {
                 helpCommand(source, "/leaderboard cache threads <0-256|status>", "/leaderboard cache threads ",
                         "设置或查看历史扫描线程；0 自动，最多使用 50% 逻辑处理器；修改后立即重新扫描");
                 helpCommand(source, "/leaderboard ratelimit clear", "/leaderboard ratelimit clear", "清除全部限流记录");
+                helpCommand(source, "/leaderboard webtheme <icon|blue|rgb #RRGGBB|status>",
+                        "/leaderboard webtheme ", "管理网页主题颜色来源");
+                helpCommand(source, "/leaderboard webswitch <name|weight|add|remove|list|status>",
+                        "/leaderboard webswitch ", "管理网页服务器切换列表；权重越小越靠前，1 最先显示");
             }
             case "admin-config" -> {
                 if (!op) return 0;
@@ -653,6 +691,77 @@ public final class RankBoardMod implements ModInitializer {
         source.sendSuccess(() -> Component.literal("轮播标题颜色："
                 + (followMetric ? "跟随当前榜单颜色" : "固定青色")
                 + " (carousel-color-follow-metric=" + followMetric + ")").withStyle(ChatFormatting.GRAY), false);
+        return 1;
+    }
+
+    private int setWebThemeMode(CommandSourceStack source, boolean followIcon) {
+        try {
+            RankBoardConfig.set(source.getServer(), "web-theme-follow-icon", Boolean.toString(followIcon));
+            if (!followIcon) RankBoardConfig.set(source.getServer(), "web-theme-base", "auto");
+            boolean running = WebDashboard.restart(source.getServer());
+            source.sendSuccess(() -> Component.literal("网页主题已切换为："
+                    + (followIcon ? "读取服务器图标颜色" : "默认蓝色系")).withStyle(ChatFormatting.GREEN), true);
+            if (!running) source.sendFailure(Component.literal("配置已保存，但网页服务重启失败。"));
+            return running ? 1 : 0;
+        } catch (IllegalArgumentException | java.io.IOException exception) {
+            source.sendFailure(Component.literal("网页主题设置失败：" + exception.getMessage()));
+            return 0;
+        }
+    }
+
+    private int setWebThemeRgb(CommandSourceStack source, String color) {
+        try {
+            String normalized = RankBoardConfig.set(source.getServer(), "web-theme-base", color);
+            RankBoardConfig.set(source.getServer(), "web-theme-follow-icon", "false");
+            boolean running = WebDashboard.restart(source.getServer());
+            source.sendSuccess(() -> Component.literal("网页主题已切换为 RGB 色系：" + normalized)
+                    .withStyle(ChatFormatting.GREEN), true);
+            if (!running) source.sendFailure(Component.literal("配置已保存，但网页服务重启失败。"));
+            return running ? 1 : 0;
+        } catch (IllegalArgumentException | java.io.IOException exception) {
+            source.sendFailure(Component.literal("RGB 颜色无效，请使用 #RRGGBB：" + exception.getMessage()));
+            return 0;
+        }
+    }
+
+    private int webThemeModeStatus(CommandSourceStack source) {
+        boolean followIcon = Boolean.parseBoolean(RankBoardConfig.value("web-theme-follow-icon"));
+        String base = RankBoardConfig.value("web-theme-base");
+        String mode = followIcon ? "读取服务器图标颜色"
+                : (base.equalsIgnoreCase("auto") ? "默认蓝色系" : "RGB 色系 " + base);
+        source.sendSuccess(() -> Component.literal("网页主题：" + mode
+                + " (web-theme-follow-icon=" + followIcon + ")").withStyle(ChatFormatting.GRAY), false);
+        return 1;
+    }
+
+    private int modifyWebSwitchPeer(CommandSourceStack source, boolean add, String address) {
+        java.util.LinkedHashSet<String> peers = new java.util.LinkedHashSet<>();
+        String configured = RankBoardConfig.value("web-switcher-peers");
+        if (!configured.isBlank()) {
+            for (String peer : configured.split(",")) if (!peer.isBlank()) peers.add(peer.strip());
+        }
+        boolean changed = add ? peers.add(address.strip()) : peers.remove(address.strip());
+        if (!changed) {
+            source.sendSuccess(() -> Component.literal(add ? "该网页地址已经存在。" : "未找到该网页地址。"), false);
+            return 0;
+        }
+        return setConfig(source, "web-switcher-peers", String.join(",", peers));
+    }
+
+    private int webSwitchList(CommandSourceStack source) {
+        String configured = RankBoardConfig.value("web-switcher-peers");
+        source.sendSuccess(() -> Component.literal(configured.isBlank()
+                ? "未配置其他 RankBoard 网页。"
+                : "其他 RankBoard 网页：" + configured).withStyle(ChatFormatting.GRAY), false);
+        return configured.isBlank() ? 0 : configured.split(",").length;
+    }
+
+    private int webSwitchStatus(CommandSourceStack source) {
+        String name = RankBoardConfig.value("web-switcher-name");
+        String weight = RankBoardConfig.value("web-switcher-weight");
+        String peers = RankBoardConfig.value("web-switcher-peers");
+        source.sendSuccess(() -> Component.literal("网页切换：名称=" + name + "，权重=" + weight
+                + "，其他网页=" + (peers.isBlank() ? "无" : peers)).withStyle(ChatFormatting.GRAY), false);
         return 1;
     }
 

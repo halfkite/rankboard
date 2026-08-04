@@ -1,230 +1,46 @@
 # RankBoard
 
+[中文](#中文) | [English](#english)
+
+---
+
 ## 中文
 
-RankBoard 是一个 Fabric 服务端排行榜模组。玩家不需要安装客户端模组，即可使用原版计分板和网页查看排行榜。
+RankBoard 是一个服务端排行榜模组，支持 Fabric 和 NeoForge。玩家不需要客户端模组即可使用原版计分板和网页查看排行榜。
 
-当前版本：`1.7.0`
+当前版本：`1.8.0`　|　[完整中文文档](docs/rankboard.md)　|　[English documentation](docs/rankboard_en.md)
 
-### 最近更新（1.7.0）
+### 功能简介
 
-- 新增 PvP 榜与输出榜；输出按原版伤害值的十分之一显示。
-- 关闭侧边栏后可直接重新开启，并恢复个人总览、单榜或轮播状态。
-- 旧世界历史、玩家偏好和配置会继续读取；缺少可靠周期边界的新榜单会明确标注为“部分统计”。
-- 历史统计会在后台进行权威扫描；扫描期间可先查看缓存预览，不必等待扫描完成。
-- 历史扫描支持真正并行的多线程读取：`history-scan-threads=0` 自动使用最多 50% 的逻辑处理器，也可用 `/leaderboard cache threads <0-256>` 设置并立即重新扫描。`history-files-per-second` 是每个线程的读取上限，总上限为两者相乘。
-- 假人不会收到 RankBoard 的菜单或个人计分板数据包；真实玩家的榜单仍会统计假人的数据。
-- 修复网页“当前在线”文字被背景遮挡的问题。
-
-### 功能与用途
-
-- **多项统计**：记录食物、跳跃、挖掘、放置、击杀、PvP、死亡、交易、在线时间、飞行、钓鱼、受伤、伤害输出、丢弃、拾取、合成和红石元件放置。
-- **可信周期**：区分完整与部分周期，排除缺失边界或累计值回退的数据；升级后新增榜单从首次可信基线开始。
-- **时间周期**：提供 `daily`、`weekly`、`monthly`、`yearly` 和 `all`，方便分别查看短期活动成绩和服务器长期记录。
-- **离线数据读取**：直接读取原版 `world/stats/*.json`，即使玩家当前不在线，也能保留并查询历史成绩。
-- **缓存与后台更新**：首次加载时控制读取速度，避免启动卡顿；之后只检查变化的文件，降低服务器持续开销。
-- **存档数据目录**：排行榜世界状态保存在 `world/data/rankboard/`；旧的 `world/data/rankboard_leaderboard.dat` 会在启动时安全迁移。
-- **游戏内展示**：个人榜、全服榜、轮播榜和进服恢复让玩家无需打开网页即可查看排名；抬头加 Shift 可快速打开查询菜单。
-- **玩家信息**：缓存头像、显示最后在线时间，并按玩家正在查看的个人榜单同步排行榜、聊天、TAB 与头顶名牌颜色。已有其他队伍的玩家不会被 RankBoard 抢占头顶名牌效果。
-- **网页排行榜**：提供日期范围、在线筛选、服务器图标、主题配色及 Modrinth/GitHub 链接，适合分享给不在游戏中的玩家。
-- **请求限流**：API 按 IP 逐渐增加冷却时间，防止网页刷新或异常客户端占满服务器资源；图标和静态文件使用独立限制。
-- **白名单**：可沿用服务器白名单，也可单独指定 RankBoard 统计对象，用于只展示活动成员、工作人员或指定玩家。
-- **计分板清理**：检测并清除其他模组留下的计分板目标，避免多个模组争用侧边栏。
+- 17 种统计榜单，支持 daily / weekly / monthly / yearly / all 五种时间周期
+- 游戏内原版侧边栏：个人榜、全服榜、轮播榜，进服自动恢复
+- 网页排行榜：日期范围查询、在线筛选、主题配色、多服务器切换
+- 离线数据读取、后台缓存更新、IP 请求限流、白名单筛选
 
 ### 安装
 
+**Fabric：**
 1. 安装对应 Minecraft 版本的 Fabric Loader 和 Fabric API。
 2. 将 JAR 放入服务器 `mods/` 目录。
-3. 启动服务器一次，生成 `config/rankboard/` 配置目录。
-4. 修改配置后重启，或使用 `/leaderboard config reload`。
 
-1.21 系列需要 Fabric Loader `0.15.11` 或更高版本，Java 21 或更高版本。
+**NeoForge：**
+1. 安装对应 Minecraft 版本的 NeoForge。
+2. 将 JAR 放入服务器 `mods/` 目录。
 
-26.x 系列需要 Fabric Loader `0.18.6` 或更高版本，Java 25 或更高版本。
+启动服务器一次生成 `config/rankboard/` 配置目录，修改配置后重启或使用 `/leaderboard config reload`。
 
-### 常用命令
+1.21 系列需要 Java 21+；26.x 系列需要 Java 25+。
 
-普通玩家：
-
-```text
-/leaderboard                                         换出聊天栏面板
-/leaderboard help                                    获取指令帮助
-/leaderboard <daily|weekly|monthly|yearly|all> <metric> [limit] 选择指定的日/周/月/年/总排行榜
-/leaderboard mine <all|day|week|month>               查询自己的全部统计分数
-/leaderboard display show <period> <metric>          显示自己的客户端原版侧边栏
-/leaderboard display on                              恢复关闭前的客户端侧边栏
-/leaderboard display off                             关闭自己的客户端侧边栏
-/leaderboard carousel <true|false|status>            开关或查询自己的榜单轮播
-/leaderboard lookmenu <true|false|status>            开关或查询自己的抬头+蹲起菜单
-```
-
-OP：
+### 快速上手
 
 ```text
-/leaderboard display show <周期> <榜单> <玩家>        为指定玩家显示个人侧边栏
-/leaderboard display off <玩家>                      关闭指定玩家的个人侧边栏
-/leaderboard displayfilter <榜单> <true|false|status> 管理单个榜单是否允许玩家显示
-/leaderboard scoreboard show <周期> <榜单>           设置全服共享的原版侧边栏
-/leaderboard scoreboard clear                         关闭全服共享侧边栏
-/leaderboard scoreboard cleanup                       清理其他模组正在显示的计分板
-/leaderboard scoreboard blocking <true|false|status>  自动屏蔽其他模组计分板
-/leaderboard whitelist <true|false|status>           使用服务器白名单筛选排行榜
-/leaderboard botfilter <true|false|status>           过滤名称以 bot_ 开头的玩家
-/leaderboard customfilter <true|false|status>        过滤无法识别身份的历史玩家
-/leaderboard onlinefilter <true|false|status>        只显示当前在线玩家
-/leaderboard modwhitelist add <name|UUID>            添加 RankBoard 独立白名单成员
-/leaderboard modwhitelist remove <name|UUID>         移除 RankBoard 独立白名单成员
-/leaderboard modwhitelist list|reload                查看或重新读取独立白名单
-/leaderboard cache <status|reload>                   查看或重新加载历史统计缓存
-/leaderboard cache threads <0-256>                   设置历史扫描线程；0 自动，最多使用 50% 逻辑处理器，并立即并行重新扫描
-/leaderboard cache threads status                    查看配置值与实际使用的扫描线程数
-/leaderboard lookup <UUID|whitelist>                 查询 Mojang UUID 对应的玩家名
-/leaderboard ratelimit clear                          清空全部网页 IP 限流与累计冷却
-/leaderboard config <list|reload|get|set>            查看、修改或重载配置
-/leaderboard lookmenu global <true|false|status>     OP 开关或查询全服抬头+蹲起菜单
-/leaderboard namecolor <true|false|scoreboard-only|status> 设置或查询全服名字颜色模式
-/leaderboard color list                              列出所有榜单颜色
-/leaderboard color <metric>                          打开英中双语的 16 色点击预选菜单
-/leaderboard color <metric> <颜色名|#RRGGBB>         使用 Tab 补全英文颜色名，或设置自定义 RGB
-/leaderboard color reset <metric|all>                恢复单个或全部默认颜色
-/leaderboard label <metric> <名称>                   自定义榜单显示名称，例如 placed py榜
-/leaderboard label list                              查看所有榜单显示名称
-/leaderboard label reset <metric|all>                恢复单个或全部默认名称
+/leaderboard                          打开可点击的排行榜菜单
+/leaderboard mine                     查询自己的统计分数
+/leaderboard display show all playtime 显示在线榜侧边栏
+/leaderboard help                     查看帮助
 ```
 
-`true/false` 是推荐的新语法。旧的 `on/off` 和 `enable/disable` 仍作为兼容别名保留。
-
-### 配置
-
-主配置：`config/rankboard/rankboard.properties`
-
-网页配置：`config/rankboard/rankboard-web.properties`
-
-主配置项：
-
-```properties
-history-files-per-second=50                 # 每个扫描线程每秒读取的文件数；总上限为此值乘以实际线程数
-history-scan-threads=0                      # 扫描线程；0 自动，最多使用 50% 可用处理器
-welcome-enabled=true                        # 玩家进服时发送欢迎语
-welcome-name=auto                           # 欢迎语服务器名；auto 自动读取
-join-menu-enabled=true                      # 玩家进服时换出聊天栏面板
-join-web-hint-enabled=false                 # 玩家进服时提示网页排行榜地址
-web-public-address=                         # 网站按钮/进服提示地址；留空默认 http://127.0.0.1:8765，可用指令修改
-restore-scoreboard-on-join=true             # 恢复玩家上次选择的客户端计分板
-look-up-sneak-menu-enabled=true             # 抬头并按住 Shift 换出聊天栏面板
-carousel-enabled=true                       # 允许玩家开启榜单自动轮播
-carousel-interval-seconds=30                # 榜单轮播切换间隔，单位秒
-client-scoreboard-show-zero=false           # 客户端计分板显示数值为 0 的玩家
-scoreboard-switch-message-enabled=true      # 切换榜单后发送提示消息
-scoreboard-name-color-enabled=true          # true=排行榜/聊天/TAB/头顶；false=关闭；scoreboard-only=仅排行榜
-player-name-color-render-mode=legacy        # legacy=最近原版16色；rgb=排行榜/聊天/TAB精确RGB
-metric-color-food=#FFAA00                   # 大胃王榜颜色；其他榜单同样使用 metric-color-<metric>
-metric-color-jumps=#FF55FF
-metric-color-mined=#5555FF                  # 挖掘榜：蓝色
-metric-color-placed=#00AAAA                 # 放置榜：深青色
-metric-color-kills=#FF5555
-metric-color-pvp=#AA0000                    # PvP榜：深红色
-metric-color-deaths=#AA0000
-metric-color-trades=#55FF55                 # 交易榜：绿色
-metric-color-playtime=#55FFFF               # 在线榜：青色
-metric-color-elytra=#FF55FF
-metric-color-fishing=#0000AA                # 钓鱼榜：深蓝色
-metric-color-damage=#FF5555                 # 受伤榜：红色
-metric-color-dealt=#FFAA00                  # 输出榜：金色
-metric-color-dropped=#555555
-metric-color-picked=#55FF55
-metric-color-crafted=#FFAA00
-metric-color-redstone=#FF5555
-metric-label-placed=放置榜                   # 游戏菜单、计分板标题和网页结果中显示的名称
-metric-label-playtime=在线榜
-metric-label-elytra=飞行榜
-metric-label-damage=受伤榜
-metric-label-pvp=PvP榜
-metric-label-dealt=输出榜
-metric-label-dropped=丢垃圾榜
-metric-label-picked=拾荒榜
-metric-label-crafted=合成榜
-metric-label-redstone=红石大蛇榜
-scoreboard-title-color-enabled=true         # 计分板标题跟随榜单颜色
-scoreboard-live-update-enabled=true         # 玩家行为改变统计时实时刷新榜单
-scoreboard-live-update-window-seconds=30    # 高频行为检测时间窗口，单位秒
-scoreboard-live-update-threshold=100        # 窗口内超过此次数后降低刷新频率
-scoreboard-live-update-throttle-seconds=30  # 高频时最短刷新间隔，单位秒
-foreign-scoreboard-blocking-mode=ask        # 其他模组计分板：ask/enabled/disabled
-mod-whitelist-enabled=false                 # 只读取 RankBoard 独立白名单中的玩家
-help-visibility=all                         # 帮助可见范围：all/op/hidden
-avatar-cache-enabled=true                   # 缓存进服玩家的皮肤头像
-avatar-cache-days=7                         # 玩家头像缓存保留天数
-website-button-enabled=true                 # 菜单和 Help 中是否显示 [打开网站]
-```
-
-关闭网站按钮：`/leaderboard config set website-button-enabled false`。重新设为 `true` 即可恢复。
-
-`redstone` 红石大蛇榜统计红石粉、火把、中继器、比较器、按钮、拉杆、压力板、探测铁轨、绊线钩、讲台、标靶、幽匿感测体、活塞、各类铁轨、钟、发射器、投掷器、门、活板门、栅栏门、漏斗、音符盒、红石灯、TNT、大型垂滴叶、合成器、命令方块，以及所有氧化和涂蜡状态的铜灯等可放置元件。
-
-网页配置项：
-
-```properties
-host=0.0.0.0                              # 网页服务监听地址；0.0.0.0 接受所有连接
-port=8765                                 # 网页服务端口
-web-data-requests-per-second=1            # 单个 IP 的数据请求基础频率
-web-icon-request-interval-seconds=3       # 图片基础请求间隔，单位秒
-web-ranking-refresh-interval-seconds=30   # 网页排行榜整体刷新间隔，单位秒
-server-name=auto                           # 网页显示的服务器名；auto 自动读取
-web-switcher-name=auto                     # 左侧服务器切换按钮名称；auto 使用网页服务器名
-web-switcher-weight=100                    # 显示权重；越小越靠前，1 最先显示
-web-switcher-peers=                        # 其他 RankBoard 地址，逗号分隔；省略端口时沿用当前网页端口
-website-icon=server-icon.png              # 服务器图标；只能放在 config/rankboard/
-web-theme-follow-icon=true                # 默认从左上角图标自动取色
-web-theme-base=auto                       # 开服图标取色后自动写入，也可填写 #RRGGBB
-web-theme-primary=auto                    # 主色；可填写 #RRGGBB
-web-theme-background=auto                 # 背景色；可填写 #RRGGBB
-web-theme-surface=auto                    # 面板色；可填写 #RRGGBB
-web-theme-text=auto                       # 主文字色；可填写 #RRGGBB
-web-theme-muted=auto                      # 次要文字色；可填写 #RRGGBB
-web-theme-border=auto                     # 边框色；可填写 #RRGGBB
-```
-
-`website-icon` 优先读取 `config/rankboard/` 目录内的文件；默认图标不存在时回退到服务端根目录的 `server-icon.png`。绝对路径、越界路径和目录外符号链接都会被拒绝。可用 `/leaderboard webtheme icon` 启用图标取色、`/leaderboard webtheme blue` 恢复默认蓝色系，或 `/leaderboard webtheme rgb #3F505E` 生成自定义 RGB 色系。
-
-多个 RankBoard 网页可通过 `/leaderboard webswitch add <IP|域名|网址>` 加入左侧切换列表。地址未写端口时使用当前网页端口；相同 IP 和端口会自动合并。使用 `/leaderboard webswitch name <名称|auto>` 设置本服按钮名称，使用 `/leaderboard webswitch weight <1-10000>` 设置顺序，权重 `1` 最先显示。
-
-### RankBoard 白名单
-
-启用配置：
-
-```text
-/leaderboard config set mod-whitelist-enabled true
-```
-
-白名单文件：`config/rankboard/rankboard-whitelist.json`
-
-示例：
-
-```json
-[
-  {"uuid": "00000000-0000-0000-0000-000000000000"},
-  {"name": "PlayerName"}
-]
-```
-
-启用后，统计文件扫描、缓存、游戏榜单和网页榜单只接受该文件中的玩家。原有服务器 `whitelistOnly` 配置仍然有效；两个白名单同时开启时取交集。
-
-### 网页与限流
-
-默认地址：`http://服务器地址:8765/`
-
-接口示例：
-
-```text
-GET /api/rankings?metric=playtime&period=all
-GET /api/rankings?metric=kills&period=week
-GET /api/rankings?metric=playtime&from=2026-07-16&to=2026-07-20
-```
-
-数据接口 `/api/rankings` 和 `/api/site` 共享同一 IP 的 30 秒请求计数。默认每秒 1 次；30 秒内超过 30 次后，固定 30 分钟改为每 5 秒 1 次。图片默认每 3 秒 1 次；30 秒内超过 6 次后，固定 30 分钟改为每 15 秒 1 次。静态网页资源仍为每秒 1 次。
-
-超过限制返回 HTTP `429` 和 `Retry-After`。OP 可以使用 `/leaderboard ratelimit clear` 清除所有累计冷却。
+更多命令、配置和游戏内操作说明请参阅[完整文档](docs/rankboard.md)。
 
 ### 构建
 
@@ -234,235 +50,47 @@ GET /api/rankings?metric=playtime&from=2026-07-16&to=2026-07-20
 gradlew.bat build
 ```
 
-构建产物位于 `build/libs/`。发布版本和 Minecraft 版本会写入 JAR 文件名。
-
-多版本构建结果位于 `multi-version-builds/`，每次成功构建也会单独归档到 `mod-builds/` 的时间戳目录。
+构建产物位于 `build/libs/`。
 
 ---
 
 ## English
 
-RankBoard is a server-side Fabric leaderboard mod. Players do not need a client-side mod to use the vanilla sidebar or the web dashboard.
+RankBoard is a server-side leaderboard mod supporting Fabric and NeoForge. Players do not need a client-side mod to use the vanilla sidebar or the web dashboard.
 
-Current version: `1.7.0`
+Current version: `1.8.0`　|　[中文文档](docs/rankboard.md)　|　[English documentation](docs/rankboard_en.md)
 
-### Latest updates (1.7.0)
+### Highlights
 
-- Added PvP and damage-dealt rankings; damage dealt is displayed as one tenth of the vanilla value.
-- Reopening a closed sidebar restores the saved overview, single-board, or carousel state.
-- Existing world history, player preferences, and settings remain compatible; metrics without trustworthy period boundaries are marked as partial statistics.
-- Historical statistics are authoritatively scanned in the background. Cache previews remain available during the scan.
-- Historical scanning performs genuinely parallel reads: `history-scan-threads=0` automatically uses up to 50% of logical processors, and `/leaderboard cache threads <0-256>` saves the setting and immediately restarts scanning. `history-files-per-second` is the per-thread limit, so the total limit is the product of both values.
-- Fake players receive no RankBoard menu or personal-sidebar packets, while real-player rankings still include their statistics.
-- Fixed the web dashboard's current-online label being obscured by its background.
-
-### Features and purpose
-
-- **Multiple statistics**: Tracks food, jumps, mined and placed blocks, kills, PvP kills, deaths, trades, playtime, flight, fishing, damage taken and dealt, dropped and picked-up items, crafted items, and redstone components.
-- **Trustworthy periods**: Marks incomplete periods and excludes missing boundaries or counters that moved backwards; new metrics begin at their first trustworthy baseline.
-- **Time periods**: `daily`, `weekly`, `monthly`, `yearly`, and `all` separate short-term event results from long-term server records.
-- **Offline data**: Reads vanilla `world/stats/*.json`, so historical scores remain available when a player is offline.
-- **Caching and background updates**: Throttles the first scan to avoid startup stalls, then checks only changed files to reduce ongoing server work.
-- **World data directory**: Persistent leaderboard state is stored under `world/data/rankboard/`; the legacy `world/data/rankboard_leaderboard.dat` is migrated safely at startup.
-- **In-game display**: Personal and server-wide sidebars, carousel rotation, join restoration, and the look-up-plus-Shift menu let players check rankings without opening a browser.
-- **Player context**: Cached avatars and last-online timestamps are joined by colors synchronized with each player's active personal board across rankings, chat, TAB, and overhead names. RankBoard does not take overhead-name control from existing teams.
-- **Web dashboard**: Date ranges, online-only filtering, server icons, themes, and Modrinth/GitHub links make rankings easy to share outside the game.
-- **Request protection**: IP-based progressive API cooldowns prevent refresh storms or abusive clients from consuming server resources; icons and static files have separate limits.
-- **Whitelists**: Keep the server whitelist behavior or use a separate RankBoard list when only event members, staff, or selected players should appear.
-- **Scoreboard cleanup**: Detects and removes scoreboard objectives left by other mods so the sidebar remains under RankBoard's control.
+- 17 ranking metrics with daily / weekly / monthly / yearly / all periods
+- Vanilla sidebar: personal, server-wide, and carousel modes with join restoration
+- Web dashboard: date range queries, online filtering, themes, multi-server switcher
+- Offline data, background caching, IP rate limiting, whitelist filtering
 
 ### Installation
 
+**Fabric:**
 1. Install Fabric Loader and Fabric API for the target Minecraft version.
 2. Put the JAR in the server `mods/` directory.
-3. Start the server once to create `config/rankboard/`.
-4. Restart after editing configuration, or run `/leaderboard config reload`.
 
-Minecraft 1.21 releases require Fabric Loader `0.15.11+` and Java 21+.
+**NeoForge:**
+1. Install NeoForge for the target Minecraft version.
+2. Put the JAR in the server `mods/` directory.
 
-Minecraft 26.x releases require Fabric Loader `0.18.6+` and Java 25+.
+Start the server once to create `config/rankboard/`. Restart after editing configuration, or run `/leaderboard config reload`.
 
-### Commands
+Minecraft 1.21 requires Java 21+. Minecraft 26.x requires Java 25+.
 
-Players:
-
-```text
-/leaderboard                                         Open the clickable ranking menu
-/leaderboard help                                    Show commands, settings, and descriptions
-/leaderboard <period> <metric> [limit]               Show a ranking in chat
-/leaderboard mine <all|day|week|month>               Show the caller's statistic scores
-/leaderboard display show <period> <metric>          Show the caller's personal sidebar
-/leaderboard display on                              Restore the sidebar state saved before closing it
-/leaderboard display off                             Hide the caller's personal sidebar
-/leaderboard carousel <true|false|status>            Toggle or inspect personal carousel rotation
-/leaderboard lookmenu <true|false|status>            Toggle or inspect the personal look-up+sneak menu
-```
-
-Operators:
+### Quick Start
 
 ```text
-/leaderboard display show <period> <metric> <player> Show a personal sidebar for a player
-/leaderboard display off <player>                    Hide a player's personal sidebar
-/leaderboard displayfilter <metric> <true|false|status> Allow or block one metric from display
-/leaderboard scoreboard show <period> <metric>       Set the server-wide vanilla sidebar
-/leaderboard scoreboard clear                         Clear the server-wide sidebar
-/leaderboard scoreboard cleanup                       Clear displayed scoreboards from other mods
-/leaderboard scoreboard blocking <true|false|status> Automatically block other-mod scoreboards
-/leaderboard whitelist <true|false|status>           Filter rankings by the server whitelist
-/leaderboard botfilter <true|false|status>           Filter players with a bot_ name prefix
-/leaderboard customfilter <true|false|status>        Filter unrecognized historical players
-/leaderboard onlinefilter <true|false|status>        Restrict rankings to online players
-/leaderboard modwhitelist add|remove <name|UUID>     Manage the RankBoard-only whitelist
-/leaderboard modwhitelist list|reload                List or reload the RankBoard-only whitelist
-/leaderboard cache <status|reload>                   Inspect or reload historical-stat cache
-/leaderboard cache threads <0-256>                   Set scanner threads; 0 is automatic, capped at 50% of logical processors, and restarts a parallel scan
-/leaderboard cache threads status                    Show the configured and resolved scanner-thread counts
-/leaderboard lookup <UUID|whitelist>                 Look up Mojang player names
-/leaderboard ratelimit clear                          Clear all web IP rate-limit history
-/leaderboard config <list|reload|get|set>            List, change, or reload settings
-/leaderboard lookmenu global <true|false|status>     Operators toggle or inspect the global menu
-/leaderboard namecolor <true|false|scoreboard-only|status> Set or inspect the server-wide name-color mode
-/leaderboard color list                              List all metric colors
-/leaderboard color <metric>                          Open the bilingual clickable 16-color preset menu
-/leaderboard color <metric> <name|#RRGGBB>           Tab-complete an English color name or set a custom RGB value
-/leaderboard color reset <metric|all>                Restore one or all default colors
-/leaderboard label <metric> <name>                   Set a custom display name, for example placed Building
-/leaderboard label list                              List all metric display names
-/leaderboard label reset <metric|all>                Restore one or all default names
+/leaderboard                          Open the clickable ranking menu
+/leaderboard mine                     Show your personal scores
+/leaderboard display show all playtime Show the playtime sidebar
+/leaderboard help                     Show command help
 ```
 
-`true/false` is the recommended syntax. The old `on/off` and `enable/disable` aliases remain available for compatibility.
-
-### Configuration
-
-Main configuration: `config/rankboard/rankboard.properties`
-
-Web configuration: `config/rankboard/rankboard-web.properties`
-
-Main settings:
-
-```properties
-history-files-per-second=50                 # Files scanned per second by each thread; total is this value times resolved threads
-history-scan-threads=0                      # Scanner threads; 0 is automatic, capped at 50% of processors
-welcome-enabled=true                        # Send a welcome message to a joining player
-welcome-name=auto                           # Welcome name; auto reads server information
-join-menu-enabled=true                      # Open the chat ranking menu on join
-join-web-hint-enabled=false                 # Show the web-ranking address on join
-web-public-address=                         # Website button/join hint address; blank defaults to http://127.0.0.1:8765 and can be changed by command
-restore-scoreboard-on-join=true             # Restore the player's previous personal sidebar
-look-up-sneak-menu-enabled=true             # Open the chat ranking menu while looking up and holding Shift
-carousel-enabled=true                       # Let players enable automatic ranking rotation
-carousel-interval-seconds=30                # Carousel interval in seconds
-client-scoreboard-show-zero=false           # Show zero-value players in personal sidebars
-scoreboard-switch-message-enabled=true      # Send a message after switching rankings
-scoreboard-name-color-enabled=true          # true=ranking/chat/TAB/overhead; false=off; scoreboard-only=ranking only
-player-name-color-render-mode=legacy        # legacy=nearest vanilla color; rgb=exact RGB in ranking/chat/TAB
-metric-color-food=#FFAA00                   # Food metric; other colors use metric-color-<metric>
-metric-color-jumps=#FF55FF
-metric-color-mined=#5555FF                  # Mining: blue
-metric-color-placed=#00AAAA                 # Placed blocks: dark aqua
-metric-color-kills=#FF5555
-metric-color-pvp=#AA0000                    # PvP kills: dark red
-metric-color-deaths=#AA0000
-metric-color-trades=#55FF55                 # Trades: green
-metric-color-playtime=#55FFFF               # Online: aqua
-metric-color-elytra=#FF55FF
-metric-color-fishing=#0000AA                # Fishing: dark blue
-metric-color-damage=#FF5555                 # Damage: red
-metric-color-dealt=#FFAA00                  # Damage dealt: gold
-metric-color-dropped=#555555
-metric-color-picked=#55FF55
-metric-color-crafted=#FFAA00
-metric-color-redstone=#FF5555
-metric-label-placed=放置榜                   # Display name used by game menus, sidebar titles, and web results
-metric-label-playtime=在线榜
-metric-label-elytra=飞行榜
-metric-label-damage=受伤榜
-metric-label-pvp=PvP榜
-metric-label-dealt=输出榜
-metric-label-dropped=丢垃圾榜
-metric-label-picked=拾荒榜
-metric-label-crafted=合成榜
-metric-label-redstone=红石大蛇榜
-scoreboard-title-color-enabled=true         # Color sidebar titles by metric
-scoreboard-live-update-enabled=true         # Refresh rankings after player statistic changes
-scoreboard-live-update-window-seconds=30    # High-frequency detection window in seconds
-scoreboard-live-update-threshold=100        # Begin throttling after this many changes in the window
-scoreboard-live-update-throttle-seconds=30  # Minimum high-frequency refresh interval in seconds
-foreign-scoreboard-blocking-mode=ask        # Other-mod scoreboards: ask/enabled/disabled
-mod-whitelist-enabled=false                 # Read only players from the RankBoard whitelist
-help-visibility=all                         # Help visibility: all/op/hidden
-avatar-cache-enabled=true                   # Cache joined-player skin avatars
-avatar-cache-days=7                         # Avatar cache retention in days
-```
-
-The `redstone` metric counts placed power, transmission, and mechanical components, including redstone dust and torches, repeaters, comparators, buttons, levers, pressure plates, detector rails, tripwire hooks, lecterns, targets, sculk sensors, pistons, rails, bells, dispensers, droppers, doors, trapdoors, fence gates, hoppers, note blocks, redstone lamps, TNT, big dripleaves, crafters, command blocks, and every oxidized or waxed copper-bulb variant.
-
-Web settings:
-
-```properties
-host=0.0.0.0                              # Web-server bind address; 0.0.0.0 accepts all connections
-port=8765                                 # Web-server port
-web-data-requests-per-second=1            # Per-IP base rate for data requests
-web-icon-request-interval-seconds=3       # Base image request interval in seconds
-web-ranking-refresh-interval-seconds=30   # Full ranking refresh interval in seconds
-server-name=auto                           # Server name shown on the web page; auto reads server data
-web-switcher-name=auto                     # Name shown in the left-side server switcher
-web-switcher-weight=100                    # Lower values sort first; weight 1 is first
-web-switcher-peers=                        # Other RankBoard addresses, comma-separated; omitted ports inherit the local web port
-website-icon=server-icon.png              # Server icon, restricted to config/rankboard/
-web-theme-follow-icon=true                # Derive the default palette from the website icon
-web-theme-base=auto                       # Persisted from the icon at startup; also accepts #RRGGBB
-web-theme-primary=auto                    # Primary color; accepts #RRGGBB
-web-theme-background=auto                 # Background color; accepts #RRGGBB
-web-theme-surface=auto                    # Panel color; accepts #RRGGBB
-web-theme-text=auto                       # Main text color; accepts #RRGGBB
-web-theme-muted=auto                      # Secondary text color; accepts #RRGGBB
-web-theme-border=auto                     # Border color; accepts #RRGGBB
-```
-
-Set `website-button-enabled=false` with `/leaderboard config set website-button-enabled false` to hide the website button from the menu and Help. Set it back to `true` to restore it.
-
-`website-icon` first reads from `config/rankboard/`; when the default icon is missing it falls back to `server-icon.png` in the server root. Absolute paths, traversal paths, and escaping symlinks are rejected. Use `/leaderboard webtheme icon` for icon-derived colors, `/leaderboard webtheme blue` for the default blue palette, or `/leaderboard webtheme rgb #3F505E` for a custom RGB palette.
-
-Add RankBoard sites to the left-side switcher with `/leaderboard webswitch add <IP|host|URL>`. Addresses without a port inherit the current web port, and entries resolving to the same IP and port are merged. Set this server's button with `/leaderboard webswitch name <name|auto>` and order it with `/leaderboard webswitch weight <1-10000>`; weight `1` sorts first.
-
-### RankBoard Whitelist
-
-Enable it with:
-
-```text
-/leaderboard config set mod-whitelist-enabled true
-```
-
-Whitelist file: `config/rankboard/rankboard-whitelist.json`
-
-Example:
-
-```json
-[
-  {"uuid": "00000000-0000-0000-0000-000000000000"},
-  {"name": "PlayerName"}
-]
-```
-
-When enabled, statistics scanning, caching, in-game rankings, and web rankings accept only listed players. The existing `whitelistOnly` setting remains active; when both lists are enabled, their intersection is used.
-
-### Web and Rate Limiting
-
-Default address: `http://server-address:8765/`
-
-Example endpoints:
-
-```text
-GET /api/rankings?metric=playtime&period=all
-GET /api/rankings?metric=kills&period=week
-GET /api/rankings?metric=playtime&from=2026-07-16&to=2026-07-20
-```
-
-`/api/rankings` and `/api/site` share a 30-second request count per IP. Data starts at one request per second; more than 30 requests in 30 seconds applies a five-second interval for 30 minutes. Images start at one request every three seconds; more than six requests in 30 seconds applies a 15-second interval for 30 minutes. Static web resources remain limited to one request per second.
-
-Limited requests return HTTP `429` with `Retry-After`. Operators can clear all accumulated cooldowns with `/leaderboard ratelimit clear`.
+See the [full documentation](docs/rankboard_en.md) for all commands, configuration, and in-game operations.
 
 ### Building
 
@@ -472,6 +100,4 @@ JDK 21 is required; JDK 25 is required for 26.x builds.
 gradlew.bat build
 ```
 
-Artifacts are written to `build/libs/`. The JAR filename includes the mod and Minecraft versions.
-
-Multi-version results are collected under `multi-version-builds/`; every successful build is also archived in a timestamped directory under `mod-builds/`.
+Artifacts are written to `build/libs/`.

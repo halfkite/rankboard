@@ -94,7 +94,21 @@ final class RankBoardConfig {
             option("web-icon-request-interval-seconds", "3", FileKind.WEB, "请求限流", "图片基础请求间隔秒数；默认 3。30 秒内超过 6 次后，固定 30 分钟改为每 15 秒 1 次。"),
             option("web-ranking-refresh-interval-seconds", "30", FileKind.WEB, "网页数据", "网页排行榜数据快照刷新间隔秒数；默认 30，范围 1-3600。"),
             option("server-name", "auto", FileKind.WEB, "网页显示", "网页显示的服务器名称；默认 auto，自动读取服务器 MOTD。"),
-            option("website-icon", "server-icon.png", FileKind.WEB, "网页显示", "网页图标文件名；只能使用 config/rankboard/ 目录内的文件，默认 server-icon.png。")
+            option("web-switcher-name", "auto", FileKind.WEB, "网页切换", "服务器切换按钮名称；auto 使用网页服务器名称。"),
+            option("web-switcher-weight", "100", FileKind.WEB, "网页切换", "服务器切换按钮排序权重；数值越小越靠前，1 最先显示。"),
+            option("web-switcher-peers", "", FileKind.WEB, "网页切换", "其他 RankBoard 网页地址，逗号分隔；省略端口时沿用当前网页端口。"),
+            option("website-icon", "server-icon.png", FileKind.WEB, "网页显示", "网页图标路径；优先读取 config/rankboard/，缺失时读取服务端根目录。"),
+            option("web-theme-follow-icon", "true", FileKind.WEB, "网页主题", "true 从左上角网站图标提取网页配色；false 使用默认蓝色系；默认 true。"),
+            option("web-theme-base", "auto", FileKind.WEB, "网页主题", "主题基础色；图标取色模式会在开服时自动写入检测到的 #RRGGBB，也可手动设置。"),
+            option("web-theme-background", "auto", FileKind.WEB, "网页主题", "网页背景颜色；auto 使用图标取色，或填写 #RRGGBB。"),
+            option("web-theme-surface", "auto", FileKind.WEB, "网页主题", "面板和卡片颜色；auto 使用图标取色，或填写 #RRGGBB。"),
+            option("web-theme-primary", "auto", FileKind.WEB, "网页主题", "按钮、选中项和主要数值颜色；auto 使用图标取色，或填写 #RRGGBB。"),
+            option("web-theme-secondary", "auto", FileKind.WEB, "网页主题", "排名、状态和辅助强调颜色；auto 使用图标取色，或填写 #RRGGBB。"),
+            option("web-theme-text", "auto", FileKind.WEB, "网页主题", "主要文字颜色；auto 根据背景自动选择，或填写 #RRGGBB。"),
+            option("web-theme-muted", "auto", FileKind.WEB, "网页主题", "说明、时间和 UUID 等次要文字颜色；auto 自动生成，或填写 #RRGGBB。"),
+            option("web-theme-border", "auto", FileKind.WEB, "网页主题", "边框和分隔线颜色；auto 自动生成，或填写 #RRGGBB。"),
+            option("web-theme-success", "auto", FileKind.WEB, "网页主题", "在线状态颜色；auto 自动生成，或填写 #RRGGBB。"),
+            option("web-theme-danger", "auto", FileKind.WEB, "网页主题", "错误和警告颜色；auto 自动生成，或填写 #RRGGBB。")
     );
     private static volatile RankBoardConfig current = defaults();
     private static volatile Properties mainProperties = defaultsFor(FileKind.MAIN);
@@ -385,12 +399,16 @@ final class RankBoardConfig {
         String value = rawValue.strip();
         if (option.key.startsWith("metric-color-")) return normalizedColor(value);
         if (option.key.startsWith("metric-label-")) return normalizedLabel(value);
+        if (option.key.startsWith("web-theme-") && !option.key.equals("web-theme-follow-icon")) {
+            return value.equalsIgnoreCase("auto") ? "auto" : normalizedColor(value);
+        }
         return switch (option.key) {
             case "history-files-per-second" -> normalizedInteger(value, 1, 1000);
             case "history-scan-threads" -> normalizedInteger(value, 0, 256);
             case "carousel-interval-seconds" -> normalizedInteger(value, 3, 3600);
             case "avatar-cache-days" -> normalizedInteger(value, 1, 365);
             case "port" -> normalizedInteger(value, 1, 65535);
+            case "web-switcher-weight" -> normalizedInteger(value, 1, 10000);
             case "web-data-requests-per-second" -> normalizedInteger(value, 1, 100);
             case "web-icon-request-interval-seconds" -> normalizedInteger(value, 1, 3600);
             case "scoreboard-live-update-window-seconds" -> normalizedInteger(value, 1, 300);
@@ -400,7 +418,8 @@ final class RankBoardConfig {
                     "restore-scoreboard-on-join", "look-up-sneak-menu-enabled", "carousel-enabled", "carousel-color-follow-metric",
                     "client-scoreboard-show-zero", "scoreboard-switch-message-enabled",
                     "scoreboard-title-color-enabled",
-                    "scoreboard-live-update-enabled", "avatar-cache-enabled", "mod-whitelist-enabled" -> normalizedBoolean(value);
+                    "scoreboard-live-update-enabled", "avatar-cache-enabled", "mod-whitelist-enabled",
+                    "web-theme-follow-icon" -> normalizedBoolean(value);
             case "help-visibility" -> switch (value.toLowerCase(Locale.ROOT)) {
                 case "all" -> "all";
                 case "op", "ops" -> "op";
@@ -420,7 +439,8 @@ final class RankBoardConfig {
                 if (value.isEmpty()) throw new IllegalArgumentException(option.key + " 不能为空");
                 yield value;
             }
-            case "welcome-name", "server-name" -> value.isEmpty() ? "auto" : value;
+            case "welcome-name", "server-name", "web-switcher-name" -> value.isEmpty() ? "auto" : normalizedLabel(value);
+            case "web-switcher-peers" -> normalizePeerList(value);
             case "web-public-address" -> value.equalsIgnoreCase("auto") ? "" : value;
             default -> value;
         };
@@ -443,6 +463,20 @@ final class RankBoardConfig {
         if (value.isEmpty() || value.length() > 32) throw new IllegalArgumentException("榜单名称长度必须为 1-32 个字符");
         if (value.chars().anyMatch(Character::isISOControl)) throw new IllegalArgumentException("榜单名称不能包含控制字符");
         return value;
+    }
+
+    private static String normalizePeerList(String value) {
+        if (value.isEmpty()) return "";
+        java.util.LinkedHashSet<String> peers = new java.util.LinkedHashSet<>();
+        for (String raw : value.split(",")) {
+            String peer = raw.strip();
+            if (peer.isEmpty()) continue;
+            if (peer.chars().anyMatch(Character::isISOControl)) {
+                throw new IllegalArgumentException("网页地址不能包含控制字符");
+            }
+            peers.add(peer);
+        }
+        return String.join(",", peers);
     }
 
     private static String normalizedInteger(String value, int minimum, int maximum) {

@@ -29,11 +29,67 @@ $variants = @(
         Range = ">=1.21 <1.21.5"
     },
     @{
+        Name = "1.21.1"
+        Minecraft = "1.21.1"
+        Mappings = "1.21.1+build.3"
+        Fabric = "0.102.1+1.21.1"
+        Range = ">=1.21.1 <1.21.2"
+    },
+    @{
+        Name = "1.21.2"
+        Minecraft = "1.21.2"
+        Mappings = "1.21.2+build.1"
+        Fabric = "0.106.1+1.21.2"
+        Range = ">=1.21.2 <1.21.3"
+    },
+    @{
+        Name = "1.21.3"
+        Minecraft = "1.21.3"
+        Mappings = "1.21.3+build.2"
+        Fabric = "0.114.1+1.21.3"
+        Range = ">=1.21.3 <1.21.4"
+    },
+    @{
+        Name = "1.21.4"
+        Minecraft = "1.21.4"
+        Mappings = "1.21.4+build.8"
+        Fabric = "0.119.4+1.21.4"
+        Range = ">=1.21.4 <1.21.5"
+    },
+    @{
         Name = "1.21.5"
         Minecraft = "1.21.5"
         Mappings = "1.21.5+build.1"
         Fabric = "0.128.2+1.21.5"
         Range = ">=1.21.5 <1.21.10"
+    },
+    @{
+        Name = "1.21.6"
+        Minecraft = "1.21.6"
+        Mappings = "1.21.6+build.1"
+        Fabric = "0.128.2+1.21.6"
+        Range = ">=1.21.6 <1.21.7"
+    },
+    @{
+        Name = "1.21.7"
+        Minecraft = "1.21.7"
+        Mappings = "1.21.7+build.8"
+        Fabric = "0.129.0+1.21.7"
+        Range = ">=1.21.7 <1.21.8"
+    },
+    @{
+        Name = "1.21.8"
+        Minecraft = "1.21.8"
+        Mappings = "1.21.8+build.1"
+        Fabric = "0.136.1+1.21.8"
+        Range = ">=1.21.8 <1.21.9"
+    },
+    @{
+        Name = "1.21.9"
+        Minecraft = "1.21.9"
+        Mappings = "1.21.9+build.1"
+        Fabric = "0.134.1+1.21.9"
+        Range = ">=1.21.9 <1.21.10"
     },
     @{
         Name = "1.21.10"
@@ -59,7 +115,7 @@ New-Item -ItemType Directory -Force $innerDirectory, $staging | Out-Null
 foreach ($variant in $variants) {
     Write-Host "Building RankBoard for Minecraft $($variant.Minecraft)..."
     $arguments = @(
-        "clean", "build", "--no-daemon",
+        "clean", "build", "-x", "remapSourcesJar", "--no-daemon",
         "-Pminecraft_version=$($variant.Minecraft)",
         "-Pmapping_type=yarn",
         "-Pyarn_mappings=$($variant.Mappings)",

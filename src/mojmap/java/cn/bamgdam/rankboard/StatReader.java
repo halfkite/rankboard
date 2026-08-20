@@ -51,8 +51,24 @@ final class StatReader {
     private static volatile Future<?> warmupTask;
     private static volatile boolean ready;
     private static volatile boolean persistentCacheLoaded;
+    private static volatile boolean loadedFromPersistentCacheOnly;
 
     private StatReader() { }
+
+    static void initialize(MinecraftServer server) {
+        Future<?> oldTask = warmupTask;
+        if (oldTask != null) oldTask.cancel(true);
+        warmupTask = null;
+        ready = false;
+        loadedFromPersistentCacheOnly = false;
+        PROCESSED.set(0); TOTAL.set(0); CACHE.clear(); SOURCE_MODIFIED.clear(); prepareItemSets();
+        persistentCacheLoaded = loadPersistentCache(server);
+        if (!persistentCacheLoaded) { startWarmup(server); return; }
+        ready = true;
+        loadedFromPersistentCacheOnly = true;
+        TOTAL.set(CACHE.size()); PROCESSED.set(CACHE.size());
+        RankBoardMod.LOGGER.info("Loaded persistent history cache: {} player files; skipping startup stat scan", CACHE.size());
+    }
 
     static void startWarmup(MinecraftServer server) {
         long generation = GENERATION.incrementAndGet();
@@ -115,6 +131,7 @@ final class StatReader {
 
     static boolean isReady() { return ready; }
     static boolean isPersistentCacheLoaded() { return persistentCacheLoaded; }
+    static boolean isLoadedFromPersistentCacheOnly() { return loadedFromPersistentCacheOnly; }
     static boolean isChecking() { return warmupTask != null && !warmupTask.isDone(); }
     static int processed() { return PROCESSED.get(); }
     static int totalFiles() { return TOTAL.get(); }

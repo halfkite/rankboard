@@ -25,6 +25,12 @@ def usesModernApi = versionParts[0] >= 26 || (versionParts[0] == 1 && versionPar
 def usesLateApi = versionParts[0] >= 26 || (versionParts[0] == 1 && versionParts[1] == 21 && versionParts.size() > 2 && versionParts[2] >= 9)
 def usesLatestApi = versionParts[0] >= 26 || (versionParts[0] == 1 && versionParts[1] == 21 && versionParts.size() > 2 && versionParts[2] >= 11)
 
+// Allow reproducible offline builds to point Loom at an already cached version
+// metadata JSON without changing the normal online resolution behavior.
+if (project.findProperty('loom_custom_metadata')) {
+    loom.customMinecraftMetadata = project.findProperty('loom_custom_metadata').toString()
+}
+
 sourceSets.main.java {
     if (versionParts[0] >= 26) {
         setSrcDirs(['src/mojmap/java'])
@@ -84,7 +90,7 @@ tasks.register('webBuild', Exec) {
 
 processResources {
     dependsOn tasks.named('webBuild')
-    def minimumLoaderVersion = versionParts[0] >= 26 ? '0.18.6' : '0.15.11'
+    def minimumLoaderVersion = '0.15.11'
     def minimumJavaVersion = versionParts[0] >= 26 ? '25' : '21'
     def minecraftDependency = project.findProperty('minecraft_dependency') ?: project.minecraft_version
     inputs.property 'version', project.version

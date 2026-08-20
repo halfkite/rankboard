@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ExternalLink, Github, PackageOpen, Server } from "lucide-react";
+import { Download, ExternalLink, Github, LayoutPanelTop, PackageOpen, Server } from "lucide-react";
 import BlurText from "@/components/BlurText/BlurText";
 
 type Metric = {
@@ -16,6 +16,7 @@ type Player = {
   formatted: string;
   lastOnline: number;
   online: boolean;
+  metrics?: Record<string, string>;
 };
 
 type RankingResponse = {
@@ -163,6 +164,18 @@ function formatLastOnline(player: Player) {
   })}`;
 }
 
+/** Places the precise total first and the abbreviated web value below it. */
+function compactValue(value: string) {
+  const separator = " · ";
+  const index = value.lastIndexOf(separator);
+  if (index < 0) return { exact: value, short: "" };
+  return { exact: value.slice(index + separator.length), short: value.slice(0, index) };
+}
+
+function csvCell(value: string | number) {
+  return `"${String(value).replaceAll('"', '""')}"`;
+}
+
 const periods = [
   { id: "all", label: "总榜" },
   { id: "day", label: "最近一日" },
@@ -211,6 +224,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sites, setSites] = useState<SiteLink[]>([]);
+  const [compactMode, setCompactMode] = useState(() => localStorage.getItem("rankboard-compact-mode") === "true");
 
   useEffect(() => {
     let cancelled = false;
@@ -218,7 +232,7 @@ export default function App() {
       setLoading(true);
       setError(null);
       try {
-        const params = new URLSearchParams({ period, metric, online: String(onlineOnly) });
+        const params = new URLSearchParams({ period, metric, online: String(onlineOnly), compact: String(compactMode) });
         if (period === "custom") {
           params.set("from", from);
           params.set("to", to);
@@ -254,7 +268,11 @@ export default function App() {
       window.clearTimeout(timer);
       window.clearInterval(interval);
     };
-  }, [period, metric, onlineOnly, from, to, rankingRefreshIntervalSeconds]);
+  }, [period, metric, onlineOnly, from, to, compactMode, rankingRefreshIntervalSeconds]);
+
+  useEffect(() => {
+    localStorage.setItem("rankboard-compact-mode", String(compactMode));
+  }, [compactMode]);
 
   useEffect(() => {
     applyTheme(siteTheme, iconColor);
@@ -360,6 +378,26 @@ export default function App() {
     return (ranking?.players ?? []).filter((player) => player.name.toLowerCase().includes(keyword));
   }, [query, ranking]);
 
+  const exportTable = () => {
+    if (!ranking || visiblePlayers.length === 0) return;
+    const metricColumns = compactMode ? metrics : [activeMetric];
+    const headers = ["排名", "玩家名称", "UUID", "最后在线", ...metricColumns.map((item) => item.label)];
+    const rows = visiblePlayers.map((player) => [
+      player.rank,
+      player.name,
+      player.uuid,
+      formatLastOnline(player),
+      ...metricColumns.map((item) => player.metrics?.[item.id] ?? (item.id === metric ? player.formatted : "0"))
+    ]);
+    const csv = "\uFEFF" + [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `rankboard-${period}-${metric}-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="app-shell">
       <header className="topbar glass">
@@ -373,6 +411,16 @@ export default function App() {
           <span className={ranking?.cacheReady ? "signal online" : "signal"} />
           {ranking?.onlineOnly ? "仅在线玩家" : "历史统计同步"}
         </div>
+        <button
+          className={compactMode ? "layout-toggle selected" : "layout-toggle"}
+          type="button"
+          aria-pressed={compactMode}
+          title={compactMode ? "切换到普通视图" : "切换到紧凑视图"}
+          onClick={() => setCompactMode((enabled) => !enabled)}
+        >
+          <LayoutPanelTop aria-hidden="true" />
+          <span>{compactMode ? "普通视图" : "紧凑视图"}</span>
+        </button>
       </header>
 
       <main className="workspace">
@@ -455,6 +503,11 @@ export default function App() {
               <span>总和</span>
               <strong>{ranking?.formattedTotal ?? "--"}</strong>
             </div>
+            <button className="export-button" type="button" onClick={exportTable}
+              disabled={!ranking || visiblePlayers.length === 0} title="导出当前筛选结果为 CSV 表格">
+              <Download aria-hidden="true" />
+              <span>导出表格</span>
+            </button>
           </div>
 
           {period === "custom" && (
@@ -483,11 +536,38 @@ export default function App() {
             </div>
           )}
 
-          <div className="ranking-list">
+          <div className={compactMode ? "ranking-list compact-list" : "ranking-list"}>
             {!loading && !error && visiblePlayers.length === 0 && (
               <div className="notice glass">当前筛选下没有可显示的玩家。</div>
             )}
-            {visiblePlayers.map((player) => (
+            {visiblePlayers.map((player) => compactMode ? (
+              <article className="ranking-card compact-card glass" key={player.uuid}>
+                <div className="compact-player">
+                  <span className="rank-number">{String(player.rank).padStart(2, "0")}</span>
+                  <PlayerAvatar player={player} />
+                  <div className="player-info">
+                    <div className="player-heading">
+                      <h2>{player.name}</h2>
+                      <span className={player.online ? "last-online online" : "last-online"}>{formatLastOnline(player)}</span>
+                    </div>
+                    <p><code>UUID {player.uuid}</code></p>
+                  </div>
+                </div>
+                <div className="compact-metrics" aria-label={`${player.name} 的全部榜单数值`}>
+                  {metrics.map((item) => {
+                    const display = player.metrics?.[item.id] ?? (item.id === metric ? player.formatted : "0");
+                    const value = compactValue(display);
+                    return (
+                      <div className="compact-metric" key={item.id}>
+                        <span>{item.label}</span>
+                        <strong>{value.exact}</strong>
+                        {value.short && <small>{value.short}</small>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </article>
+            ) : (
               <article className="ranking-card glass" key={player.uuid}>
                 <span className="rank-number">{String(player.rank).padStart(2, "0")}</span>
                 <PlayerAvatar player={player} />

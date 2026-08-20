@@ -1,4 +1,11 @@
 pluginManagement {
+    resolutionStrategy {
+        eachPlugin {
+            if (requested.id.id == 'fabric-loom' || requested.id.id == 'net.fabricmc.fabric-loom') {
+                useModule("net.fabricmc:fabric-loom:${requested.version}")
+            }
+        }
+    }
     repositories {
         maven { url = 'https://maven.fabricmc.net/' }
         gradlePluginPortal()

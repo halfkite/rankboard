@@ -425,9 +425,9 @@ final class BoardService {
         removePrivateObjective(player);
         List<RankBoardMod.Entry> visibleEntries = RankBoardConfig.get().clientScoreboardShowZero
                 ? entries : entries.stream().filter(entry -> entry.value() != 0L).toList();
-        Map<String, ServerPlayerEntity> onlinePlayers = new HashMap<>();
+        Map<UUID, ServerPlayerEntity> onlinePlayers = new HashMap<>();
         for (ServerPlayerEntity onlinePlayer : PlayerCompat.server(player).getPlayerManager().getPlayerList()) {
-            onlinePlayers.put(onlinePlayer.getName().getString(), onlinePlayer);
+            onlinePlayers.put(onlinePlayer.getUuid(), onlinePlayer);
         }
         player.networkHandler.sendPacket(new ScoreboardObjectiveUpdateS2CPacket(objective, ScoreboardObjectiveUpdateS2CPacket.ADD_MODE));
         CLIENT_OBJECTIVES.put(player.getUuid(), objective.getName());
@@ -438,17 +438,20 @@ final class BoardService {
             RankBoardMod.Entry entry = visibleEntries.get(i);
             int value = scoreboardValue(metric, entry.value());
             Optional<Text> displayName = Optional.empty();
-            ServerPlayerEntity entryPlayer = onlinePlayers.get(entry.name());
+            ServerPlayerEntity entryPlayer = onlinePlayers.get(entry.uuid());
+            // Scoreboard holders for online players must use the current profile
+            // name, never a historical cache value from before a rename.
+            String scoreHolder = entryPlayer == null ? entry.name() : ProfileCompat.name(entryPlayer.getGameProfile());
             Selection entrySelection = entryPlayer == null ? null : SELECTIONS.get(entryPlayer.getUuid());
             if (RankBoardConfig.get().nameColorMode != RankBoardConfig.NameColorMode.DISABLED
                     && entryPlayer != null && entrySelection != null) {
                 LeaderboardState.BoardPreference entryPreference = LeaderboardState.get(PlayerCompat.server(player))
                         .boardPreference(entryPlayer.getUuid());
                 boolean entryCarousel = entryPreference != null && entryPreference.carousel();
-                displayName = Optional.of(RankBoardColors.text(entry.name(), entrySelection.metric, entryCarousel));
+                displayName = Optional.of(RankBoardColors.text(scoreHolder, entrySelection.metric, entryCarousel));
             }
             player.networkHandler.sendPacket(new ScoreboardScoreUpdateS2CPacket(
-                    entry.name(), objective.getName(), value, displayName, scoreboardFormat(metric, value)));
+                    scoreHolder, objective.getName(), value, displayName, scoreboardFormat(metric, value)));
         }
         player.networkHandler.sendPacket(new ScoreboardDisplayS2CPacket(ScoreboardDisplaySlot.SIDEBAR, objective));
     }

@@ -52,14 +52,42 @@ final class StatReader {
     private static volatile Future<?> warmupTask;
     private static volatile boolean ready;
     private static volatile boolean persistentCacheLoaded;
+    private static volatile boolean loadedFromPersistentCacheOnly;
 
     private StatReader() { }
+
+    /** Loads a complete persistent cache on ordinary startups. A filesystem scan
+     * is reserved for first installation, an invalid cache, or an OP request. */
+    static void initialize(MinecraftServer server) {
+        long generation = GENERATION.incrementAndGet();
+        Future<?> oldTask = warmupTask;
+        if (oldTask != null) oldTask.cancel(true);
+        warmupTask = null;
+        ready = false;
+        PROCESSED.set(0);
+        TOTAL.set(0);
+        CACHE.clear();
+        SOURCE_MODIFIED.clear();
+        prepareItemSets();
+        persistentCacheLoaded = loadPersistentCache(server);
+        if (!persistentCacheLoaded) {
+            startWarmup(server);
+            return;
+        }
+        if (generation != GENERATION.get()) return;
+        ready = true;
+        loadedFromPersistentCacheOnly = true;
+        TOTAL.set(CACHE.size());
+        PROCESSED.set(CACHE.size());
+        RankBoardMod.LOGGER.info("Loaded persistent history cache: {} player files; skipping startup stat scan", CACHE.size());
+    }
 
     static void startWarmup(MinecraftServer server) {
         long generation = GENERATION.incrementAndGet();
         Future<?> oldTask = warmupTask;
         if (oldTask != null) oldTask.cancel(true);
         ready = false;
+        loadedFromPersistentCacheOnly = false;
         PROCESSED.set(0);
         TOTAL.set(0);
         CACHE.clear();
@@ -77,6 +105,7 @@ final class StatReader {
         warmupTask = null;
         ready = false;
         persistentCacheLoaded = false;
+        loadedFromPersistentCacheOnly = false;
     }
 
     static void reloadPlayer(MinecraftServer server, UUID uuid) {
@@ -113,6 +142,7 @@ final class StatReader {
 
     static boolean isReady() { return ready; }
     static boolean isPersistentCacheLoaded() { return persistentCacheLoaded; }
+    static boolean isLoadedFromPersistentCacheOnly() { return loadedFromPersistentCacheOnly; }
     static boolean isChecking() { return warmupTask != null && !warmupTask.isDone(); }
     static int processed() { return PROCESSED.get(); }
     static int totalFiles() { return TOTAL.get(); }

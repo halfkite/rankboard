@@ -26,7 +26,7 @@ $variants = @(
         Minecraft = "1.21"
         Mappings = "1.21+build.9"
         Fabric = "0.102.0+1.21"
-        Range = ">=1.21 <1.21.5"
+        Range = ">=1.21 <1.21.1"
     },
     @{
         Name = "1.21.1"
@@ -61,7 +61,7 @@ $variants = @(
         Minecraft = "1.21.5"
         Mappings = "1.21.5+build.1"
         Fabric = "0.128.2+1.21.5"
-        Range = ">=1.21.5 <1.21.10"
+        Range = ">=1.21.5 <1.21.6"
     },
     @{
         Name = "1.21.6"

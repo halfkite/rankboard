@@ -33,13 +33,17 @@ public final class LeaderboardState extends SavedData {
     private static final String HISTORY_SCHEMA = "4";
     private static final LocalTime COMPLETE_BOUNDARY_LIMIT = LocalTime.of(0, 5);
     private final Map<RankBoardMod.Period, PeriodData> periods = new EnumMap<>(RankBoardMod.Period.class);
-    private boolean whitelistOnly = true;
+    // New worlds start without a vanilla whitelist filter; existing worlds keep
+    // the persisted value loaded from NBT.
+    private boolean whitelistOnly;
+    private boolean whitelistModeConfigured;
     private boolean botFilterEnabled = true;
     private boolean customPlayerFilterEnabled = true;
     private boolean onlineOnly;
     private final Set<RankBoardMod.Metric> disabledDisplayMetrics = new HashSet<>();
     private final Set<UUID> nameColorDisabledPlayers = new HashSet<>();
     private final Set<UUID> lookMenuDisabledPlayers = new HashSet<>();
+    private final Map<UUID, String> playerLanguages = new HashMap<>();
     private final Map<UUID, BoardPreference> boardPreferences = new HashMap<>();
     private BoardPreference globalBoardPreference;
     private final NavigableMap<LocalDate, Map<UUID, Map<RankBoardMod.Metric, Long>>> dailySnapshots = new TreeMap<>();
@@ -82,6 +86,7 @@ public final class LeaderboardState extends SavedData {
         if (nbt.contains("botFilterEnabled")) state.botFilterEnabled = NbtCompat.getBoolean(nbt, "botFilterEnabled");
         if (nbt.contains("customPlayerFilterEnabled")) state.customPlayerFilterEnabled = NbtCompat.getBoolean(nbt, "customPlayerFilterEnabled");
         if (nbt.contains("onlineOnly")) state.onlineOnly = NbtCompat.getBoolean(nbt, "onlineOnly");
+        if (nbt.contains("whitelistModeConfigured")) state.whitelistModeConfigured = NbtCompat.getBoolean(nbt, "whitelistModeConfigured");
         for (Tag element : NbtCompat.getList(nbt, "disabledDisplayMetrics", Tag.TAG_STRING)) {
             try { state.disabledDisplayMetrics.add(RankBoardMod.Metric.valueOf(NbtCompat.asString(element))); }
             catch (IllegalArgumentException ignored) { }
@@ -97,6 +102,14 @@ public final class LeaderboardState extends SavedData {
         for (Tag element : NbtCompat.getList(nbt, "periods", Tag.TAG_COMPOUND)) {
             PeriodData data = PeriodData.fromNbt((CompoundTag) element, legacyHistory);
             state.periods.put(data.period, data);
+        }
+        for (Tag element : NbtCompat.getList(nbt, "playerLanguages", Tag.TAG_COMPOUND)) {
+            CompoundTag entry = (CompoundTag) element;
+            try {
+                UUID uuid = NbtCompat.getUuid(entry, "uuid");
+                String language = NbtCompat.getString(entry, "language");
+                if (language.matches("[a-z0-9_-]{2,32}")) state.playerLanguages.put(uuid, language);
+            } catch (RuntimeException ignored) { }
         }
         for (Tag element : NbtCompat.getList(nbt, "dailySnapshots", Tag.TAG_COMPOUND)) {
             CompoundTag snapshot = (CompoundTag) element;
@@ -135,6 +148,7 @@ public final class LeaderboardState extends SavedData {
         periods.values().forEach(data -> list.add(data.toNbt()));
         nbt.put("periods", list);
         nbt.putBoolean("whitelistOnly", whitelistOnly);
+        nbt.putBoolean("whitelistModeConfigured", whitelistModeConfigured);
         nbt.putBoolean("botFilterEnabled", botFilterEnabled);
         nbt.putBoolean("customPlayerFilterEnabled", customPlayerFilterEnabled);
         nbt.putBoolean("onlineOnly", onlineOnly);
@@ -147,6 +161,14 @@ public final class LeaderboardState extends SavedData {
         ListTag disabledLookMenus = new ListTag();
         lookMenuDisabledPlayers.forEach(uuid -> disabledLookMenus.add(StringTag.valueOf(uuid.toString())));
         nbt.put("lookMenuDisabledPlayers", disabledLookMenus);
+        ListTag languages = new ListTag();
+        playerLanguages.forEach((uuid, language) -> {
+            CompoundTag entry = new CompoundTag();
+            NbtCompat.putUuid(entry, "uuid", uuid);
+            entry.putString("language", language);
+            languages.add(entry);
+        });
+        nbt.put("playerLanguages", languages);
         ListTag snapshots = new ListTag();
         dailySnapshots.forEach((date, players) -> {
             CompoundTag snapshot = new CompoundTag();
@@ -337,6 +359,16 @@ public final class LeaderboardState extends SavedData {
 
     public RangeData range(MinecraftServer server, LocalDate from, LocalDate to, RankBoardMod.Metric metric) {
         return range(server, from, to, metric, true);
+    }
+    public boolean needsWhitelistModeSetup() { return !whitelistModeConfigured; }
+    public void setWhitelistModeConfigured() {
+        if (!whitelistModeConfigured) { whitelistModeConfigured = true; setDirty(); }
+    }
+    public boolean needsLanguageChoice(UUID uuid) { return !playerLanguages.containsKey(uuid); }
+    public String language(UUID uuid) { return playerLanguages.getOrDefault(uuid, "zh_cn"); }
+    public void setLanguage(UUID uuid, String language) {
+        if (!language.matches("[a-z0-9_-]{2,32}")) throw new IllegalArgumentException("unsupported language");
+        if (!language.equals(playerLanguages.put(uuid, language))) setDirty();
     }
 
     public RangeData range(MinecraftServer server, LocalDate from, LocalDate to,

@@ -423,30 +423,38 @@ final class BoardService {
         removePrivateObjective(player);
         List<RankBoardMod.Entry> visibleEntries = RankBoardConfig.get().clientScoreboardShowZero
                 ? entries : entries.stream().filter(entry -> entry.value() != 0L).toList();
-        Map<String, ServerPlayer> onlinePlayers = new HashMap<>();
+        Map<UUID, ServerPlayer> onlinePlayers = new HashMap<>();
         for (ServerPlayer onlinePlayer : PlayerCompat.server(player).getPlayerList().getPlayers()) {
-            onlinePlayers.put(onlinePlayer.getName().getString(), onlinePlayer);
+            onlinePlayers.put(onlinePlayer.getUUID(), onlinePlayer);
         }
         player.connection.send(new ClientboundSetObjectivePacket(objective, ClientboundSetObjectivePacket.METHOD_ADD));
         CLIENT_OBJECTIVES.put(player.getUUID(), objective.getName());
         int totalValue = scoreboardValue(metric, RankBoardMod.total(entries));
         player.connection.send(new ClientboundSetScorePacket(
-                "总和", objective.getName(), totalValue, Optional.empty(), scoreboardFormat(metric, totalValue)));
+                privateScoreHolder("total"), objective.getName(), totalValue,
+                Optional.of(Component.literal("总和")), scoreboardFormat(metric, totalValue)));
         for (int i = 0; i < Math.min(14, visibleEntries.size()); i++) {
             RankBoardMod.Entry entry = visibleEntries.get(i);
             int value = scoreboardValue(metric, entry.value());
-            Optional<Component> displayName = Optional.empty();
-            ServerPlayer entryPlayer = onlinePlayers.get(entry.name());
+            // A private sidebar must not use the player's name as the protocol
+            // score-holder key.  In 26.2 the client resolves that key against
+            // its local PlayerInfo/ScoreHolder map; this can hide the local
+            // player's own row and leaves stale names after a rename.  Use a
+            // stable UUID-derived key and put the current name only in display.
+            ServerPlayer entryPlayer = onlinePlayers.get(entry.uuid());
+            String displayText = entryPlayer == null ? entry.name() : entryPlayer.getScoreboardName();
             Selection entrySelection = entryPlayer == null ? null : SELECTIONS.get(entryPlayer.getUUID());
+            Component displayComponent = Component.literal(displayText);
             if (RankBoardConfig.get().nameColorMode != RankBoardConfig.NameColorMode.DISABLED
                     && entryPlayer != null && entrySelection != null) {
                 LeaderboardState.BoardPreference entryPreference = LeaderboardState.get(PlayerCompat.server(player))
                         .boardPreference(entryPlayer.getUUID());
                 boolean entryCarousel = entryPreference != null && entryPreference.carousel();
-                displayName = Optional.of(RankBoardColors.text(entry.name(), entrySelection.metric, entryCarousel));
+                displayComponent = RankBoardColors.text(displayText, entrySelection.metric, entryCarousel);
             }
             player.connection.send(new ClientboundSetScorePacket(
-                    entry.name(), objective.getName(), value, displayName, scoreboardFormat(metric, value)));
+                    privateScoreHolder(entry.uuid()), objective.getName(), value,
+                    Optional.of(displayComponent), scoreboardFormat(metric, value)));
         }
         player.connection.send(new ClientboundSetDisplayObjectivePacket(DisplaySlot.SIDEBAR, objective));
     }
@@ -640,6 +648,12 @@ final class BoardService {
     private static String objectiveName(RankBoardMod.Period period, RankBoardMod.Metric metric, boolean personal) {
         String prefix = personal ? "rbp_" : "rbg_";
         return prefix + period.command.charAt(0) + "_" + metric.command.substring(0, Math.min(7, metric.command.length()));
+    }
+    private static String privateScoreHolder(UUID uuid) {
+        return "rb_" + uuid.toString().replace("-", "");
+    }
+    private static String privateScoreHolder(String key) {
+        return "rb_" + key;
     }
     private static boolean isRankBoardObjective(Objective objective) {
         String name = objective.getName();

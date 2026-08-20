@@ -34,13 +34,17 @@ public final class LeaderboardState extends PersistentState {
     private static final String HISTORY_SCHEMA = "4";
     private static final LocalTime COMPLETE_BOUNDARY_LIMIT = LocalTime.of(0, 5);
     private final Map<RankBoardMod.Period, PeriodData> periods = new EnumMap<>(RankBoardMod.Period.class);
-    private boolean whitelistOnly = true;
+    private boolean whitelistOnly;
+    // New worlds choose a whitelist mode from the RankBoard menu. Worlds saved
+    // before this flag existed are treated as already configured on upgrade.
+    private boolean whitelistModeConfigured;
     private boolean botFilterEnabled = true;
     private boolean customPlayerFilterEnabled = true;
     private boolean onlineOnly;
     private final Set<RankBoardMod.Metric> disabledDisplayMetrics = new HashSet<>();
     private final Set<UUID> nameColorDisabledPlayers = new HashSet<>();
     private final Set<UUID> lookMenuDisabledPlayers = new HashSet<>();
+    private final Map<UUID, String> playerLanguages = new HashMap<>();
     private final Map<UUID, BoardPreference> boardPreferences = new HashMap<>();
     private BoardPreference globalBoardPreference;
     private final NavigableMap<LocalDate, Map<UUID, Map<RankBoardMod.Metric, Long>>> dailySnapshots = new TreeMap<>();
@@ -79,6 +83,8 @@ public final class LeaderboardState extends PersistentState {
         String historySchema = NbtCompat.getString(nbt, "historySchema");
         boolean legacyHistory = historySchema.isEmpty();
         if (nbt.contains("whitelistOnly")) state.whitelistOnly = NbtCompat.getBoolean(nbt, "whitelistOnly");
+        state.whitelistModeConfigured = nbt.contains("whitelistModeConfigured")
+                ? NbtCompat.getBoolean(nbt, "whitelistModeConfigured") : true;
         if (nbt.contains("botFilterEnabled")) state.botFilterEnabled = NbtCompat.getBoolean(nbt, "botFilterEnabled");
         if (nbt.contains("customPlayerFilterEnabled")) state.customPlayerFilterEnabled = NbtCompat.getBoolean(nbt, "customPlayerFilterEnabled");
         if (nbt.contains("onlineOnly")) state.onlineOnly = NbtCompat.getBoolean(nbt, "onlineOnly");
@@ -93,6 +99,15 @@ public final class LeaderboardState extends PersistentState {
         for (NbtElement element : NbtCompat.getList(nbt, "lookMenuDisabledPlayers", NbtElement.STRING_TYPE)) {
             try { state.lookMenuDisabledPlayers.add(UUID.fromString(NbtCompat.asString(element))); }
             catch (IllegalArgumentException ignored) { }
+        }
+        for (NbtElement element : NbtCompat.getList(nbt, "playerLanguages", NbtElement.COMPOUND_TYPE)) {
+            try {
+                NbtCompound entry = (NbtCompound) element;
+                String language = NbtCompat.getString(entry, "language");
+                if (language.matches("[a-z0-9_-]{2,32}")) {
+                    state.playerLanguages.put(NbtCompat.getUuid(entry, "uuid"), language);
+                }
+            } catch (RuntimeException ignored) { }
         }
         for (NbtElement element : NbtCompat.getList(nbt, "periods", NbtElement.COMPOUND_TYPE)) {
             PeriodData data = PeriodData.fromNbt((NbtCompound) element, legacyHistory);
@@ -135,6 +150,7 @@ public final class LeaderboardState extends PersistentState {
         periods.values().forEach(data -> list.add(data.toNbt()));
         nbt.put("periods", list);
         nbt.putBoolean("whitelistOnly", whitelistOnly);
+        nbt.putBoolean("whitelistModeConfigured", whitelistModeConfigured);
         nbt.putBoolean("botFilterEnabled", botFilterEnabled);
         nbt.putBoolean("customPlayerFilterEnabled", customPlayerFilterEnabled);
         nbt.putBoolean("onlineOnly", onlineOnly);
@@ -147,6 +163,14 @@ public final class LeaderboardState extends PersistentState {
         NbtList disabledLookMenus = new NbtList();
         lookMenuDisabledPlayers.forEach(uuid -> disabledLookMenus.add(NbtString.of(uuid.toString())));
         nbt.put("lookMenuDisabledPlayers", disabledLookMenus);
+        NbtList languages = new NbtList();
+        playerLanguages.forEach((uuid, language) -> {
+            NbtCompound entry = new NbtCompound();
+            NbtCompat.putUuid(entry, "uuid", uuid);
+            entry.putString("language", language);
+            languages.add(entry);
+        });
+        nbt.put("playerLanguages", languages);
         NbtList snapshots = new NbtList();
         dailySnapshots.forEach((date, players) -> {
             NbtCompound snapshot = new NbtCompound();
@@ -216,6 +240,12 @@ public final class LeaderboardState extends PersistentState {
         for (PeriodData data : periods.values()) if (data.players.putIfAbsent(snapshot.uuid(), snapshot.values()) == null) changed = true;
         if (changed) markDirty();
     }
+    public boolean needsLanguageChoice(UUID uuid) { return !playerLanguages.containsKey(uuid); }
+    public String language(UUID uuid) { return playerLanguages.getOrDefault(uuid, "zh_cn"); }
+    public void setLanguage(UUID uuid, String language) {
+        if (!language.matches("[a-z0-9_-]{2,32}")) throw new IllegalArgumentException("unsupported language");
+        if (!language.equals(playerLanguages.put(uuid, language))) markDirty();
+    }
     public long getBaseline(RankBoardMod.Period period, UUID uuid, RankBoardMod.Metric metric) {
         PeriodData data = periods.get(period);
         return data == null ? 0 : data.players.getOrDefault(uuid, Map.of()).getOrDefault(metric, 0L);
@@ -240,6 +270,13 @@ public final class LeaderboardState extends PersistentState {
     public void setWhitelistOnly(boolean whitelistOnly) {
         if (this.whitelistOnly != whitelistOnly) {
             this.whitelistOnly = whitelistOnly;
+            markDirty();
+        }
+    }
+    public boolean needsWhitelistModeSetup() { return !whitelistModeConfigured; }
+    public void setWhitelistModeConfigured() {
+        if (!whitelistModeConfigured) {
+            whitelistModeConfigured = true;
             markDirty();
         }
     }

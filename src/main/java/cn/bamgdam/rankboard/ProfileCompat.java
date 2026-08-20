@@ -11,4 +11,8 @@ final class ProfileCompat {
     static Collection<Property> textures(GameProfile profile) {
         return profile.getProperties().get("textures");
     }
+
+    static String name(GameProfile profile) {
+        return profile.getName();
+    }
 }

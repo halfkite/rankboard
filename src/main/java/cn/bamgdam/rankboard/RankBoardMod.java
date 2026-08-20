@@ -31,7 +31,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.WeekFields;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -68,9 +73,10 @@ public final class RankBoardMod implements ModInitializer {
         CommandRegistrationCallback.EVENT.register(this::registerCommands);
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             RankBoardConfig.load(server);
+            RankBoardLanguage.load(server);
             RankBoardWhitelist.load(server);
             BoardService.enforceForeignScoreboardPolicy(server);
-            StatReader.startWarmup(server);
+            StatReader.initialize(server);
             WebDashboard.start(server);
         });
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
@@ -82,6 +88,9 @@ public final class RankBoardMod implements ModInitializer {
         });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             ServerPlayerEntity player = handler.getPlayer();
+            // Keep the UUID-keyed statistic cache aligned with the player's current
+            // profile name, including a name changed since the last login.
+            StatReader.updateName(player.getUuid(), ProfileCompat.name(player.getGameProfile()));
             LeaderboardState.get(server).ensurePlayer(player);
             AvatarCache.cacheOnJoin(server, player);
             BoardService.restore(player);
@@ -89,7 +98,6 @@ public final class RankBoardMod implements ModInitializer {
         });
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             StatReader.capturePlayer(server, handler.getPlayer());
-            StatReader.reloadPlayer(server, handler.getPlayer().getUuid());
             LOOK_MENU_HELD.remove(handler.getPlayer().getUuid());
             BoardService.disconnect(handler.getPlayer());
         });
@@ -132,6 +140,24 @@ public final class RankBoardMod implements ModInitializer {
                 .then(CommandManager.literal("day").executes(context -> showMyScores(context.getSource(), 1, "最近一日")))
                 .then(CommandManager.literal("week").executes(context -> showMyScores(context.getSource(), 7, "最近一周")))
                 .then(CommandManager.literal("month").executes(context -> showMyScores(context.getSource(), 30, "最近一月"))));
+        root.then(CommandManager.literal("language")
+                .executes(context -> languageStatus(context.getSource()))
+                .then(CommandManager.literal("status").executes(context -> languageStatus(context.getSource())))
+                .then(CommandManager.argument("code", StringArgumentType.word())
+                        .suggests((context, builder) -> CommandSource.suggestMatching(RankBoardLanguage.codes(), builder))
+                        .executes(context -> setLanguage(context.getSource(),
+                                StringArgumentType.getString(context, "code").toLowerCase(java.util.Locale.ROOT)))));
+        LiteralArgumentBuilder<ServerCommandSource> export = CommandManager.literal("export")
+                .requires(source -> CommandPermissionCompat.has(source, 2));
+        for (Period period : Period.values()) {
+            LiteralArgumentBuilder<ServerCommandSource> periodNode = CommandManager.literal(period.command);
+            for (Metric metric : Metric.values()) {
+                periodNode.then(CommandManager.literal(metric.command)
+                        .executes(context -> exportRanking(context.getSource(), period, metric)));
+            }
+            export.then(periodNode);
+        }
+        root.then(export);
         root.then(CommandManager.literal("carousel")
                 .then(CommandManager.literal("true").executes(context -> BoardService.setCarousel(context.getSource(), true)))
                 .then(CommandManager.literal("false").executes(context -> BoardService.setCarousel(context.getSource(), false)))
@@ -222,6 +248,11 @@ public final class RankBoardMod implements ModInitializer {
                 .then(CommandManager.literal("false").executes(context -> setWhitelistOnly(context.getSource(), false)))
                 .then(CommandManager.literal("on").executes(context -> setWhitelistOnly(context.getSource(), true)))
                 .then(CommandManager.literal("off").executes(context -> setWhitelistOnly(context.getSource(), false)))
+                .then(CommandManager.literal("setup")
+                        .then(CommandManager.literal("server").executes(context -> configureWhitelistMode(context.getSource(), WhitelistMode.SERVER)))
+                        .then(CommandManager.literal("mod").executes(context -> configureWhitelistMode(context.getSource(), WhitelistMode.MOD)))
+                        .then(CommandManager.literal("none").executes(context -> configureWhitelistMode(context.getSource(), WhitelistMode.NONE)))
+                        .then(CommandManager.literal("later").executes(context -> skipWhitelistDataRead(context.getSource()))))
                 .then(CommandManager.literal("status").executes(context -> whitelistStatus(context.getSource()))));
         root.then(CommandManager.literal("botfilter").requires(source -> CommandPermissionCompat.has(source, 2))
                 .then(CommandManager.literal("true").executes(context -> setBotFilter(context.getSource(), true)))
@@ -368,21 +399,25 @@ public final class RankBoardMod implements ModInitializer {
     private int helpGrouped(ServerCommandSource source, String group) {
         boolean op = CommandPermissionCompat.has(source, 2);
         if (group.equals("menu")) {
-            Text line = clickable("[玩家指令]", Formatting.AQUA, "/leaderboard help player", "玩家常用指令")
+            Text line = clickable("[" + localized(source, "help.player") + "]", Formatting.AQUA, "/leaderboard help player", "玩家常用指令")
                     .copy().append(Text.literal(" "))
-                    .append(clickable("[计分板]", Formatting.YELLOW, "/leaderboard help scoreboard", "个人计分板指令"))
+                    .append(clickable("[" + localized(source, "help.scoreboard") + "]", Formatting.YELLOW, "/leaderboard help scoreboard", "个人计分板指令"))
                     .append(Text.literal(" "))
-                    .append(clickable("[网页与配置]", Formatting.GREEN, "/leaderboard help web", "网页地址和配置说明"));
+                    .append(clickable("[" + localized(source, "help.web") + "]", Formatting.GREEN, "/leaderboard help web", "网页地址和配置说明"));
             if (op) line = line.copy().append(Text.literal(" "))
-                    .append(clickable("[OP 管理]", Formatting.RED, "/leaderboard help admin", "仅 OP 可用的管理指令"));
+                    .append(clickable("[" + localized(source, "help.admin") + "]", Formatting.RED, "/leaderboard help admin", "仅 OP 可用的管理指令"));
             Text menuLine = line;
             source.sendFeedback(() -> menuLine, false);
+            sendLanguageHelp(source);
+            if (op) source.sendFeedback(() -> whitelistSetupButtons("筛选方式快速设置："), false);
             return 1;
         }
         source.sendFeedback(() -> clickable("[返回 Help]", Formatting.GRAY,
                 "/leaderboard help", "返回帮助分组"), false);
         switch (group) {
             case "player" -> {
+                helpCommand(source, "/leaderboard language <zh|en|status>", "/leaderboard language ",
+                        "选择聊天提示语言 / Choose Chinese or English chat prompts");
                 helpCommand(source, "/leaderboard", "/leaderboard", "打开排行榜菜单");
                 helpCommand(source, "/leaderboard mine", "/leaderboard mine", "查询所有个人统计并显示总览");
                 helpCommand(source, "/leaderboard mine <all|day|week|month>", "/leaderboard mine ", "查询指定周期的个人统计");
@@ -438,6 +473,9 @@ public final class RankBoardMod implements ModInitializer {
             case "admin-players" -> {
                 if (!op) return 0;
                 helpCommand(source, "/leaderboard whitelist <true|false|status>", "/leaderboard whitelist ", "控制服务器白名单筛选");
+                helpCommand(source, "/leaderboard whitelist setup <server|mod|none>", "/leaderboard whitelist setup ",
+                        "首次安装时选择服务器白名单、模组白名单或无白名单；随后可选择是否读取榜单数据");
+                source.sendFeedback(() -> whitelistSetupButtons("筛选方式快速设置："), false);
                 helpCommand(source, "/leaderboard modwhitelist <add|remove|list|reload>", "/leaderboard modwhitelist ", "管理模组自带白名单");
                 helpCommand(source, "/leaderboard recipients <fake-only|false|whitelist|blacklist|status>", "/leaderboard recipients ", "控制哪些在线玩家接收个人榜单数据；白名单和黑名单复用模组名单");
                 helpCommand(source, "/leaderboard botfilter <true|false|status>", "/leaderboard botfilter ", "筛选 bot_ 前缀玩家；立即生效");
@@ -476,9 +514,12 @@ public final class RankBoardMod implements ModInitializer {
                 helpCommand(source, "/leaderboard webswitch <name|weight|add|remove|list|status>",
                         "/leaderboard webswitch ", "管理网页服务器切换列表；权重越小越靠前，1 最先显示");
                 helpCommand(source, "/leaderboard ratelimit clear", "/leaderboard ratelimit clear", "立即清除全部网页限流记录");
-                helpCommand(source, "/leaderboard cache <status|reload>", "/leaderboard cache ", "查看或重载历史统计缓存");
+                helpCommand(source, "/leaderboard cache <status|reload>", "/leaderboard cache ",
+                        "查看缓存状态；仅首次安装或缓存无效时自动扫描，reload 手动重新读取统计文件");
+                helpCommand(source, "/leaderboard export <all|daily|weekly|monthly|yearly> <榜单>",
+                        "/leaderboard export all playtime", "导出当前服务器筛选后的排行榜为 Excel 可打开的 CSV 表格");
                 helpCommand(source, "/leaderboard cache threads <0-256|status>", "/leaderboard cache threads ",
-                        "设置或查看历史扫描线程；0 自动，最多使用 50% 逻辑处理器；显示线程数与总扫描速率，修改后立即重新扫描");
+                        "设置或查看历史扫描线程；0 自动，最多使用 50% 逻辑处理器；下次 cache reload 时生效");
                 helpCommand(source, "/leaderboard config set avatar-cache-enabled <true|false>",
                         "/leaderboard config set avatar-cache-enabled ", "开关玩家头像缓存；重新进服时生效");
             }
@@ -575,10 +616,11 @@ public final class RankBoardMod implements ModInitializer {
     }
 
     private static void helpCommand(ServerCommandSource source, String label, String suggestion, String description) {
+        if (source.getEntity() instanceof ServerPlayerEntity player) description = RankBoardLanguage.help(player, description);
         Text command = Text.literal(label).setStyle(TextCompat.suggest(
+                Style.EMPTY.withColor(Formatting.WHITE), suggestion, Text.literal("点击填入指令栏")));
+        Text annotation = Text.literal(" - " + description).setStyle(TextCompat.suggest(
                 Style.EMPTY.withColor(Formatting.GRAY), suggestion, Text.literal("点击填入指令栏")));
-        Text annotation = Text.literal("：" + description).setStyle(TextCompat.suggest(
-                Style.EMPTY.withColor(Formatting.AQUA), suggestion, Text.literal("点击填入指令栏")));
         Text line = command.copy().append(annotation);
         source.sendFeedback(() -> line, false);
     }
@@ -591,7 +633,7 @@ public final class RankBoardMod implements ModInitializer {
     private static void configHelp(ServerCommandSource source, String key) {
         String effect = switch (key) {
             case "history-files-per-second", "history-scan-threads", "mod-whitelist-enabled" ->
-                    "；修改后执行 /leaderboard cache reload";
+                    "；不会自动读取统计文件，需执行 /leaderboard cache reload";
             case "host", "port", "server-name", "website-icon", "web-data-requests-per-second",
                     "web-icon-request-interval-seconds", "web-ranking-refresh-interval-seconds" ->
                     "；修改后执行 /leaderboard config reload";
@@ -608,9 +650,9 @@ public final class RankBoardMod implements ModInitializer {
                     .boardPreference(source.getEntity() == null ? null : source.getEntity().getUuid());
             boardEnabled = preference != null && preference.enabled();
         } catch (RuntimeException ignored) { }
-        Text firstRow = clickable("[查询分数]", Formatting.GOLD, "/leaderboard mine all", "查看自己的全部统计分数")
+        Text firstRow = clickable("[" + localized(source, "menu.scores") + "]", Formatting.GOLD, "/leaderboard mine all", "查看自己的全部统计分数")
                 .copy().append(Text.literal(" "))
-                .append(clickable(boardEnabled ? "[关闭榜单]" : "[开启榜单]",
+                .append(clickable("[" + localized(source, boardEnabled ? "menu.close_board" : "menu.open_board") + "]",
                         boardEnabled ? Formatting.RED : Formatting.GREEN,
                         boardEnabled ? "/leaderboard display off" : "/leaderboard display on",
                         boardEnabled ? "关闭自己的客户端计分板" : "恢复关闭前的客户端计分板"));
@@ -618,7 +660,7 @@ public final class RankBoardMod implements ModInitializer {
             boolean enabled = LeaderboardState.get(source.getServer()).isLookMenuEnabled(source.getEntity() == null
                     ? null : source.getEntity().getUuid());
             firstRow = firstRow.copy().append(Text.literal(" ")).append(clickable(
-                    enabled ? "[关闭抬头蹲起]" : "[开启抬头蹲起]",
+                    "[" + localized(source, enabled ? "menu.close_look" : "menu.open_look") + "]",
                     enabled ? Formatting.RED : Formatting.GREEN,
                     "/leaderboard lookmenu " + !enabled,
                     enabled ? "关闭自己的抬头+蹲起打开菜单" : "开启自己的抬头+蹲起打开菜单"));
@@ -630,7 +672,7 @@ public final class RankBoardMod implements ModInitializer {
         boolean hasSecondRowButton = false;
         if (RankBoardConfig.get().carouselEnabled) {
             secondRow = secondRow.copy().append(clickable(
-                    "[轮播]", Formatting.AQUA, "/leaderboard carousel on", "自动轮播当前周期的榜单"));
+                    "[" + localized(source, "menu.carousel") + "]", Formatting.AQUA, "/leaderboard carousel on", "自动轮播当前周期的榜单"));
             hasSecondRowButton = true;
         }
         if (RankBoardConfig.get().websiteButtonEnabled) {
@@ -641,7 +683,7 @@ public final class RankBoardMod implements ModInitializer {
         if (RankBoardConfig.get().helpVisible(source)) {
             if (hasSecondRowButton) secondRow = secondRow.copy().append(Text.literal(" "));
             secondRow = secondRow.copy().append(clickable(
-                    "[help]", Formatting.GREEN, "/leaderboard help", "查看 RankBoard 帮助"));
+                    "[" + localized(source, "menu.help") + "]", Formatting.GREEN, "/leaderboard help", "查看 RankBoard 帮助"));
             hasSecondRowButton = true;
         }
         if (hasSecondRowButton) {
@@ -661,6 +703,7 @@ public final class RankBoardMod implements ModInitializer {
         source.sendFeedback(() -> Text.literal("点击榜单即可切换自己的原版侧边栏。")
                 .formatted(Formatting.GRAY), false);
         BoardService.sendForeignScoreboardPrompt(source);
+        sendWhitelistSetupPrompt(source);
         return 1;
     }
 
@@ -669,9 +712,10 @@ public final class RankBoardMod implements ModInitializer {
         int visible = 0;
         for (Metric metric : metrics) {
             if (!LeaderboardState.get(source.getServer()).isMetricDisplayEnabled(metric)) continue;
-            Text button = clickable("[" + metric.label() + "]", metric,
+            String label = localizedMetric(source, metric);
+            Text button = clickable("[" + label + "]", metric,
                     "/leaderboard display show all " + metric.command,
-                    "点击显示总计 " + metric.label() + " 侧边栏");
+                    "点击显示总计 " + label + " 侧边栏");
             if (visible > 0) line = line.copy().append(Text.literal(" "));
             line = line.copy().append(button);
             visible++;
@@ -689,7 +733,7 @@ public final class RankBoardMod implements ModInitializer {
             BoardService.enableOverview(source, days < 0 ? Period.ALL
                     : (days <= 1 ? Period.DAILY : (days <= 7 ? Period.WEEKLY : Period.MONTHLY)));
             LeaderboardState state = LeaderboardState.get(source.getServer());
-            source.sendFeedback(() -> Text.literal("=== 我的分数 · " + label + " ===").formatted(Formatting.GOLD), false);
+            source.sendFeedback(() -> Text.literal("=== " + localized(source, "menu.scores") + " · " + label + " ===").formatted(Formatting.GOLD), false);
             LocalDate today = LocalDate.now();
             for (Metric metric : Metric.values()) {
                 long value;
@@ -697,16 +741,16 @@ public final class RankBoardMod implements ModInitializer {
                 else value = state.range(source.getServer(), today.minusDays(days - 1L), today, metric)
                         .values().getOrDefault(player.getUuid(), 0L);
                 long score = value;
-                source.sendFeedback(() -> RankBoardColors.text(metric.label() + "  ", metric)
+                source.sendFeedback(() -> RankBoardColors.text(localizedMetric(source, metric) + "  ", metric)
                         .append(Text.literal(format(metric, score)).formatted(Formatting.AQUA)), false);
             }
-            Text periods = clickable("[总计]", Formatting.GOLD, "/leaderboard mine all", "查看累计分数")
+            Text periods = clickable("[" + localized(source, "period.all") + "]", Formatting.GOLD, "/leaderboard mine all", "查看累计分数")
                     .copy().append(Text.literal(" "))
-                    .append(clickable("[最近一日]", Formatting.YELLOW, "/leaderboard mine day", "查看最近一日分数"))
+                    .append(clickable("[" + localized(source, "period.day") + "]", Formatting.YELLOW, "/leaderboard mine day", "查看最近一日分数"))
                     .append(Text.literal(" "))
-                    .append(clickable("[最近一周]", Formatting.AQUA, "/leaderboard mine week", "查看最近一周分数"))
+                    .append(clickable("[" + localized(source, "period.week") + "]", Formatting.AQUA, "/leaderboard mine week", "查看最近一周分数"))
                     .append(Text.literal(" "))
-                    .append(clickable("[最近一月]", Formatting.LIGHT_PURPLE, "/leaderboard mine month", "查看最近一月分数"));
+                    .append(clickable("[" + localized(source, "period.month") + "]", Formatting.LIGHT_PURPLE, "/leaderboard mine month", "查看最近一月分数"));
             source.sendFeedback(() -> periods, false);
             return 1;
         } catch (com.mojang.brigadier.exceptions.CommandSyntaxException exception) {
@@ -843,8 +887,9 @@ public final class RankBoardMod implements ModInitializer {
         try {
             boolean webOption = RankBoardConfig.isWebOption(key);
             String normalized = RankBoardConfig.set(source.getServer(), key, value);
-            if (key.equals("history-files-per-second") || key.equals("history-scan-threads")) {
-                StatReader.startWarmup(source.getServer());
+            if (key.equals("mod-whitelist-enabled")) {
+                LeaderboardState.get(source.getServer()).setWhitelistModeConfigured();
+                BoardService.refreshAll(source.getServer());
             }
             if (key.equals("scoreboard-name-color-enabled") || key.equals("player-name-color-render-mode")
                     || key.startsWith("metric-color-")) refreshColors(source.getServer());
@@ -868,7 +913,7 @@ public final class RankBoardMod implements ModInitializer {
 
     private int reloadConfig(ServerCommandSource source) {
         RankBoardConfig.load(source.getServer());
-        StatReader.startWarmup(source.getServer());
+        RankBoardLanguage.load(source.getServer());
         refreshColors(source.getServer());
         BoardService.refreshAll(source.getServer());
         boolean webRunning = WebDashboard.restart(source.getServer());
@@ -876,7 +921,7 @@ public final class RankBoardMod implements ModInitializer {
             source.sendError(Text.literal("配置已重载，但网页服务启动失败；请检查服务器日志和网页配置。"));
             return 0;
         }
-        source.sendFeedback(() -> Text.literal("RankBoard 主配置与网页配置已重载。")
+        source.sendFeedback(() -> Text.literal("RankBoard 主配置与网页配置已重载；历史统计未重新扫描。")
                 .formatted(Formatting.GREEN), true);
         return 1;
     }
@@ -888,15 +933,66 @@ public final class RankBoardMod implements ModInitializer {
         return 1;
     }
 
+    private int setLanguage(ServerCommandSource source, String language) {
+        if (!(source.getEntity() instanceof ServerPlayerEntity player)) {
+            source.sendError(Text.literal("此设置仅限玩家使用 / This setting is for players only."));
+            return 0;
+        }
+        if (!RankBoardLanguage.exists(language)) {
+            source.sendError(Text.literal("未知语言包 / Unknown language pack: " + language));
+            return 0;
+        }
+        LeaderboardState.get(source.getServer()).setLanguage(player.getUuid(), language);
+        source.sendFeedback(() -> Text.literal(RankBoardLanguage.text(player, "language.selected",
+                RankBoardLanguage.text(player, "language.name"))), false);
+        return 1;
+    }
+
+    private int languageStatus(ServerCommandSource source) {
+        if (!(source.getEntity() instanceof ServerPlayerEntity player)) {
+            source.sendError(Text.literal("此设置仅限玩家使用 / This setting is for players only."));
+            return 0;
+        }
+        LeaderboardState state = LeaderboardState.get(source.getServer());
+        String selected = state.needsLanguageChoice(player.getUuid()) ? "未选择 / Not selected" : state.language(player.getUuid());
+        source.sendFeedback(() -> Text.literal("聊天提示语言 / Chat prompt language: " + selected)
+                .formatted(Formatting.GRAY), false);
+        return 1;
+    }
+
+    private void sendLanguagePrompt(ServerPlayerEntity player) {
+        if (LeaderboardState.get(PlayerCompat.server(player)).needsLanguageChoice(player.getUuid())) {
+            player.sendMessage(languageButtons("请选择语言 / Select language: "), false);
+        }
+    }
+
+    private void sendLanguageHelp(ServerCommandSource source) {
+        if (source.getEntity() instanceof ServerPlayerEntity) {
+            source.sendFeedback(() -> languageButtons("语言 / Language: "), false);
+        }
+    }
+
+    private static Text languageButtons(String heading) {
+        return Text.literal(heading).formatted(Formatting.GRAY)
+                .copy().append(clickable("[中文]", Formatting.GOLD,
+                        "/leaderboard language zh_cn", "使用中文聊天提示 / Use Chinese chat prompts"))
+                .append(Text.literal(" "))
+                .append(clickable("[English]", Formatting.AQUA,
+                        "/leaderboard language en_us", "Use English chat prompts / 使用英文聊天提示"));
+    }
+
     private void sendJoinExperience(ServerPlayerEntity player) {
         if (PlayerCompat.isFake(player)) return;
         RankBoardConfig config = RankBoardConfig.get();
+        sendLanguagePrompt(player);
         if (config.welcomeEnabled) {
-            player.sendMessage(Text.literal("欢迎来到 ").formatted(Formatting.GRAY)
-                    .append(Text.literal(config.displayName(PlayerCompat.server(player))).formatted(Formatting.GOLD)), false);
+            player.sendMessage(Text.literal(RankBoardLanguage.text(player, "welcome",
+                    config.displayName(PlayerCompat.server(player)))).formatted(Formatting.GRAY)
+                    , false);
         }
         if (config.joinWebHintEnabled) {
-            player.sendMessage(Text.literal("可在 " + config.webAddress(PlayerCompat.server(player)) + " 查看网页排行榜。")
+            player.sendMessage(Text.literal(RankBoardLanguage.text(player, "web_hint",
+                    config.webAddress(PlayerCompat.server(player))))
                     .formatted(Formatting.AQUA), false);
         }
         if (config.joinMenuEnabled) menu(player.getCommandSource());
@@ -920,6 +1016,16 @@ public final class RankBoardMod implements ModInitializer {
         return Text.literal(label).setStyle(TextCompat.interactive(Style.EMPTY.withColor(color), command, Text.literal(hover)));
     }
 
+    private static String localized(ServerCommandSource source, String key) {
+        return source.getEntity() instanceof ServerPlayerEntity player ? RankBoardLanguage.text(player, key) : key;
+    }
+
+    private static String localizedMetric(ServerCommandSource source, Metric metric) {
+        String configured = metric.label();
+        String defaultLabel = RankBoardConfig.defaultValue("metric-label-" + metric.command);
+        return configured.equals(defaultLabel) ? localized(source, "metric." + metric.command) : configured;
+    }
+
     private static Text clickable(String label, Metric metric, String command, String hover) {
         return Text.literal(label).setStyle(TextCompat.interactive(
                 Style.EMPTY.withColor(RankBoardColors.renderedRgb(metric)), command, Text.literal(hover)));
@@ -932,7 +1038,7 @@ public final class RankBoardMod implements ModInitializer {
             URI uri = URI.create(address);
             if (!("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))
                     || uri.getHost() == null) throw new IllegalArgumentException();
-            return Text.literal("[打开网站]").setStyle(TextCompat.openUrl(
+            return Text.literal("[" + localized(source, "menu.website") + "]").setStyle(TextCompat.openUrl(
                     Style.EMPTY.withColor(Formatting.AQUA), address, Text.literal("打开 RankBoard 网页排行榜")));
         } catch (RuntimeException exception) {
             return Text.literal("[网站地址无效]").formatted(Formatting.DARK_GRAY);
@@ -1167,7 +1273,9 @@ public final class RankBoardMod implements ModInitializer {
     }
 
     private int setWhitelistOnly(ServerCommandSource source, boolean enabled) {
-        LeaderboardState.get(source.getServer()).setWhitelistOnly(enabled);
+        LeaderboardState state = LeaderboardState.get(source.getServer());
+        state.setWhitelistOnly(enabled);
+        state.setWhitelistModeConfigured();
         BoardService.refreshAll(source.getServer());
         source.sendFeedback(() -> Text.literal(enabled
                 ? "排行榜已仅显示服务器白名单玩家。" : "排行榜已显示所有有统计数据的玩家。"), true);
@@ -1178,6 +1286,74 @@ public final class RankBoardMod implements ModInitializer {
         boolean enabled = LeaderboardState.get(source.getServer()).isWhitelistOnly();
         source.sendFeedback(() -> Text.literal("排行榜白名单过滤：" + (enabled ? "已开启" : "已关闭")), false);
         return enabled ? 1 : 0;
+    }
+
+    private int configureWhitelistMode(ServerCommandSource source, WhitelistMode mode) {
+        try {
+            LeaderboardState state = LeaderboardState.get(source.getServer());
+            switch (mode) {
+                case SERVER -> {
+                    state.setWhitelistOnly(true);
+                    RankBoardConfig.set(source.getServer(), "mod-whitelist-enabled", "false");
+                }
+                case MOD -> {
+                    state.setWhitelistOnly(false);
+                    RankBoardConfig.set(source.getServer(), "mod-whitelist-enabled", "true");
+                }
+                case NONE -> {
+                    state.setWhitelistOnly(false);
+                    RankBoardConfig.set(source.getServer(), "mod-whitelist-enabled", "false");
+                }
+            }
+            state.setWhitelistModeConfigured();
+            BoardService.refreshAll(source.getServer());
+            String description = switch (mode) {
+                case SERVER -> "服务器白名单";
+                case MOD -> "模组白名单";
+                case NONE -> "无白名单";
+            };
+            source.sendFeedback(() -> Text.literal("已选择：" + description + "。")
+                    .formatted(Formatting.GREEN), true);
+            sendWhitelistDataReadPrompt(source);
+            return 1;
+        } catch (java.io.IOException exception) {
+            source.sendError(Text.literal("白名单模式保存失败：" + exception.getMessage()));
+            return 0;
+        }
+    }
+
+    private int skipWhitelistDataRead(ServerCommandSource source) {
+        source.sendFeedback(() -> Text.literal("已保留当前榜单缓存；需要读取玩家统计文件时输入 /leaderboard cache reload。")
+                .formatted(Formatting.GRAY), false);
+        return 1;
+    }
+
+    private void sendWhitelistSetupPrompt(ServerCommandSource source) {
+        if (!CommandPermissionCompat.has(source, 2)
+                || !LeaderboardState.get(source.getServer()).needsWhitelistModeSetup()) return;
+        source.sendFeedback(() -> whitelistSetupButtons("首次排行榜筛选方式："), false);
+    }
+
+    private static Text whitelistSetupButtons(String heading) {
+        return Text.literal(heading).formatted(Formatting.GRAY)
+                .copy().append(clickable("[白名单]", Formatting.YELLOW,
+                        "/leaderboard whitelist setup server", "仅显示服务器白名单中的玩家"))
+                .append(Text.literal(" "))
+                .append(clickable("[模组白名单]", Formatting.AQUA,
+                        "/leaderboard whitelist setup mod", "仅显示 RankBoard 模组白名单中的玩家"))
+                .append(Text.literal(" "))
+                .append(clickable("[无白名单]", Formatting.GREEN,
+                        "/leaderboard whitelist setup none", "显示所有符合其他筛选条件的玩家"));
+    }
+
+    private void sendWhitelistDataReadPrompt(ServerCommandSource source) {
+        Text prompt = Text.literal("是否立即读取榜单数据：").formatted(Formatting.GRAY)
+                .copy().append(clickable("[读取榜单数据]", Formatting.GOLD,
+                        "/leaderboard cache reload", "扫描 world/stats/*.json 并重建榜单缓存"))
+                .append(Text.literal(" "))
+                .append(clickable("[暂不读取]", Formatting.GRAY,
+                        "/leaderboard whitelist setup later", "保留当前缓存，之后可用 /leaderboard cache reload 读取"));
+        source.sendFeedback(() -> prompt, false);
     }
 
     private int setBotFilter(ServerCommandSource source, boolean enabled) {
@@ -1226,7 +1402,6 @@ public final class RankBoardMod implements ModInitializer {
         try {
             boolean changed = add ? RankBoardWhitelist.add(source.getServer(), player)
                     : RankBoardWhitelist.remove(source.getServer(), player);
-            if (changed && RankBoardConfig.get().modWhitelistEnabled) StatReader.startWarmup(source.getServer());
             if (changed) BoardService.refreshAll(source.getServer());
             source.sendFeedback(() -> Text.literal(changed
                     ? (add ? "已添加到模组白名单：" : "已从模组白名单移除：") + player
@@ -1251,7 +1426,6 @@ public final class RankBoardMod implements ModInitializer {
         RankBoardWhitelist.reload(source.getServer());
         source.sendFeedback(() -> Text.literal("模组白名单已重新加载，共 "
                 + RankBoardWhitelist.entries().size() + " 项。"), true);
-        if (RankBoardConfig.get().modWhitelistEnabled) StatReader.startWarmup(source.getServer());
         BoardService.refreshAll(source.getServer());
         return 1;
     }
@@ -1269,7 +1443,9 @@ public final class RankBoardMod implements ModInitializer {
     }
 
     private int cacheStatus(ServerCommandSource source) {
-        String status = StatReader.isReady() ? "已完成" : "加载中";
+        String status = StatReader.isChecking() ? "扫描中"
+                : StatReader.isLoadedFromPersistentCacheOnly() ? "已从持久缓存加载（启动时未扫描）"
+                : StatReader.isReady() ? "已完成" : "等待读取";
         source.sendFeedback(() -> Text.literal("历史统计缓存：" + status + "（" + StatReader.progress()
                         + "，扫描线程 " + StatReader.resolvedScanThreads() + "）")
                 .formatted(Formatting.GRAY), false);
@@ -1278,7 +1454,7 @@ public final class RankBoardMod implements ModInitializer {
 
     private int reloadCache(ServerCommandSource source) {
         StatReader.startWarmup(source.getServer());
-        source.sendFeedback(() -> Text.literal("已重新开始加载历史统计缓存，当前进度 " + StatReader.progress() + "。")
+        source.sendFeedback(() -> Text.literal("已开始读取 world/stats/*.json 并重建历史统计缓存，当前进度 " + StatReader.progress() + "。")
                 .formatted(Formatting.GRAY), true);
         return 1;
     }
@@ -1295,11 +1471,10 @@ public final class RankBoardMod implements ModInitializer {
     private int setCacheThreads(ServerCommandSource source, int requested) {
         try {
             String saved = RankBoardConfig.set(source.getServer(), "history-scan-threads", Integer.toString(requested));
-            StatReader.startWarmup(source.getServer());
             int resolved = StatReader.resolvedScanThreads();
             source.sendFeedback(() -> Text.literal("历史扫描线程已保存为 " + saved + "，实际使用 " + resolved
                             + "（最多为逻辑处理器的 50%），总扫描上限 " + StatReader.effectiveScanRate()
-                            + " 文件/秒；已重新开始扫描。")
+                            + " 文件/秒；下次 /leaderboard cache reload 时生效。")
                     .formatted(Formatting.GREEN), true);
             return 1;
         } catch (IllegalArgumentException | java.io.IOException exception) {
@@ -1345,13 +1520,50 @@ public final class RankBoardMod implements ModInitializer {
         }
     }
 
+    private int exportRanking(ServerCommandSource source, Period period, Metric metric) {
+        if (!LeaderboardState.get(source.getServer()).isMetricDisplayEnabled(metric)) {
+            source.sendError(Text.literal(metric.label() + " 已被 OP 禁止显示，无法导出。"));
+            return 0;
+        }
+        List<Entry> rows = entries(source.getServer(), period, metric);
+        Path directory = RankBoardConfig.configDirectory(source.getServer()).resolve("exports");
+        String timestamp = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").format(LocalDateTime.now());
+        Path file = directory.resolve("rankboard-" + period.command + "-" + metric.command + "-" + timestamp + ".csv");
+        try {
+            Files.createDirectories(directory);
+            try (var writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
+                // UTF-8 BOM lets common spreadsheet programs recognise Chinese text immediately.
+                writer.write('\uFEFF');
+                writer.write("排名,玩家名称,UUID,榜单,周期,数值,显示数值\r\n");
+                for (int index = 0; index < rows.size(); index++) {
+                    Entry entry = rows.get(index);
+                    writer.write((index + 1) + "," + csv(entry.name()) + "," + entry.uuid() + ","
+                            + csv(metric.label()) + "," + csv(period.label) + "," + entry.value() + ","
+                            + csv(format(metric, entry.value())) + "\r\n");
+                }
+            }
+            source.sendFeedback(() -> Text.literal("已导出 " + rows.size() + " 条排行榜数据："
+                    + file.toAbsolutePath()).formatted(Formatting.GREEN), true);
+            return rows.size();
+        } catch (java.io.IOException exception) {
+            source.sendError(Text.literal("导出排行榜失败：" + exception.getMessage()));
+            LOGGER.error("Could not export {} {} ranking to {}", period.command, metric.command, file, exception);
+            return 0;
+        }
+    }
+
+    private static String csv(String value) {
+        return '"' + value.replace("\"", "\"\"") + '"';
+    }
+
     static List<Entry> entries(net.minecraft.server.MinecraftServer server, Period period, Metric metric) {
         LeaderboardState state = LeaderboardState.get(server);
         state.rollPeriods(server);
         return StatReader.readAll(server, metric).stream()
                 .filter(snapshot -> isIncluded(server, state, snapshot.uuid(), snapshot.name()))
                 .filter(snapshot -> period == Period.ALL || state.hasBaseline(period, snapshot.uuid(), metric))
-                .map(snapshot -> new Entry(snapshot.name(), Math.max(0, snapshot.value(metric) - (period == Period.ALL ? 0 : state.getBaseline(period, snapshot.uuid(), metric)))))
+                .map(snapshot -> new Entry(snapshot.uuid(), snapshot.name(), Math.max(0,
+                        snapshot.value(metric) - (period == Period.ALL ? 0 : state.getBaseline(period, snapshot.uuid(), metric)))))
                 .sorted(Comparator.comparingLong(Entry::value).reversed().thenComparing(Entry::name))
                 .toList();
     }
@@ -1452,7 +1664,8 @@ public final class RankBoardMod implements ModInitializer {
     }
 
     @FunctionalInterface interface Counter { long read(ServerPlayerEntity player); }
-    record Entry(String name, long value) { }
+    record Entry(java.util.UUID uuid, String name, long value) { }
+    private enum WhitelistMode { SERVER, MOD, NONE }
     private record ColorPreset(String key, String label, Formatting formatting) {
         String hex() { return String.format(java.util.Locale.ROOT, "#%06X", formatting.getColorValue()); }
     }

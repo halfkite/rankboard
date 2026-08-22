@@ -83,7 +83,9 @@ tasks.register('webBuild', Exec) {
     workingDir file('web')
     inputs.files(fileTree('web/src'), 'web/index.html', 'web/vite.config.ts',
             'web/tsconfig.json', 'web/tsconfig.app.json', 'web/tsconfig.node.json')
-    inputs.dir('web/public')
+    if (file('web/public').exists()) {
+        inputs.dir('web/public')
+    }
     outputs.dir('web/dist')
     commandLine npmExecutable, 'run', 'build'
 }

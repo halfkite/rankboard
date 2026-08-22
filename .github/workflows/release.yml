@@ -1,0 +1,117 @@
+name: Build and publish RankBoard
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version (for example 1.9.0)
+        required: true
+        default: 1.9.0
+      minecraft_version:
+        description: Minecraft version to build
+        required: true
+        default: 26.2
+      version_type:
+        description: Release channel
+        required: true
+        type: choice
+        options:
+          - beta
+          - release
+          - alpha
+        default: beta
+  push:
+    tags:
+      - release-*
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    env:
+      MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+      CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Resolve release metadata
+        id: release
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_MINECRAFT: ${{ inputs.minecraft_version }}
+          INPUT_VERSION_TYPE: ${{ inputs.version_type }}
+        run: |
+          if [[ -n "$INPUT_VERSION" ]]; then
+            version="$INPUT_VERSION"
+          else
+            version="${GITHUB_REF_NAME#release-}"
+          fi
+          minecraft="${INPUT_MINECRAFT:-26.2}"
+          version_type="${INPUT_VERSION_TYPE:-beta}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "minecraft_version=$minecraft" >> "$GITHUB_OUTPUT"
+          echo "version_type=$version_type" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build Fabric artifact
+        shell: bash
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          MINECRAFT_VERSION: ${{ steps.release.outputs.minecraft_version }}
+        run: |
+          ./gradlew clean build \
+            -Pminecraft_version="$MINECRAFT_VERSION" \
+            -Pmapping_type=none \
+            -Ploader_version=0.19.3 \
+            -Pfabric_version=0.157.0+26.2 \
+            -Pmod_version="$VERSION"
+          mkdir -p release
+          artifact="$(find build/libs -maxdepth 1 -type f -name 'rankboard-*.jar' ! -name '*-sources.jar' | head -n 1)"
+          test -n "$artifact"
+          cp "$artifact" release/
+          sha256sum release/*.jar | tee release/SHA256SUMS
+
+      - name: Publish GitHub, Modrinth, and CurseForge
+        uses: Kira-NT/mc-publish@v3
+        with:
+          files: release/*.jar
+          name: RankBoard ${{ steps.release.outputs.version }} Fabric ${{ steps.release.outputs.minecraft_version }}
+          version: ${{ steps.release.outputs.version }}
+          version-type: ${{ steps.release.outputs.version_type }}
+          loaders: fabric
+          game-versions: ${{ steps.release.outputs.minecraft_version }}
+          environment: server
+          changelog: |
+            RankBoard ${{ steps.release.outputs.version }} Fabric ${{ steps.release.outputs.minecraft_version }}.
+
+            Includes the Issue #4 scoreboard compatibility fix: UUID-derived score holders,
+            current display names after renaming, and a visible local-player sidebar entry.
+          modrinth-id: TcDzE8EJ
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          curseforge-id: 1663124
+          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-tag: ${{ steps.release.outputs.version }}
+          github-prerelease: ${{ steps.release.outputs.version_type != 'release' }}
+          retry-attempts: 3
+          retry-delay: 15000
+
+      - name: Upload checksum to GitHub Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: rankboard-${{ steps.release.outputs.version }}-${{ steps.release.outputs.minecraft_version }}-checksums
+          path: release/SHA256SUMS

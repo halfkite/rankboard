@@ -8,7 +8,7 @@
 
 RankBoard 是一个服务端排行榜模组，支持 Fabric 和 NeoForge。玩家不需要客户端模组即可使用原版计分板和网页查看排行榜。
 
-当前版本：`1.8.0`　|　[完整中文文档](docs/rankboard.md)　|　[English documentation](docs/rankboard_en.md)
+当前版本：`1.9.0`　|　[完整中文文档](docs/rankboard.md)　|　[English documentation](docs/rankboard_en.md)
 
 ### 功能简介
 
@@ -52,13 +52,24 @@ gradlew.bat build
 
 构建产物位于 `build/libs/`。
 
+### GitHub Actions 发布
+
+仓库中的 `.github/workflows/release.yml` 可以在 GitHub Actions 中构建并发布 Fabric 版本。进入 **Actions → Build and publish RankBoard → Run workflow**，填写版本号和 Minecraft 版本即可。
+
+发布前需要在仓库 **Settings → Secrets and variables → Actions** 添加以下 Secrets：
+
+- `MODRINTH_TOKEN`：Modrinth 项目令牌
+- `CURSEFORGE_TOKEN`：CurseForge 作者 API 令牌
+
+GitHub Release 使用工作流自带的 `GITHUB_TOKEN`。令牌不会写入源码；工作流默认构建 Fabric 26.2，并发布为 Beta。
+
 ---
 
 ## English
 
 RankBoard is a server-side leaderboard mod supporting Fabric and NeoForge. Players do not need a client-side mod to use the vanilla sidebar or the web dashboard.
 
-Current version: `1.8.0`　|　[中文文档](docs/rankboard.md)　|　[English documentation](docs/rankboard_en.md)
+Current version: `1.9.0`　|　[中文文档](docs/rankboard.md)　|　[English documentation](docs/rankboard_en.md)
 
 ### Highlights
 
@@ -101,3 +112,14 @@ gradlew.bat build
 ```
 
 Artifacts are written to `build/libs/`.
+
+### GitHub Actions publishing
+
+The repository includes `.github/workflows/release.yml`. Open **Actions → Build and publish RankBoard → Run workflow**, then enter the release version and Minecraft version.
+
+Before publishing, add these repository Actions secrets under **Settings → Secrets and variables → Actions**:
+
+- `MODRINTH_TOKEN`: the Modrinth project token
+- `CURSEFORGE_TOKEN`: the CurseForge author API token
+
+GitHub Releases use the workflow-provided `GITHUB_TOKEN`. Tokens are never stored in source code. The workflow defaults to Fabric 26.2 and a Beta release.

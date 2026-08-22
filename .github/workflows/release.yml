@@ -58,7 +58,7 @@ jobs:
           echo "version_type=$version_type" >> "$GITHUB_OUTPUT"
 
       - name: Set up Java 25
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25'
@@ -74,6 +74,7 @@ jobs:
           MINECRAFT_VERSION: ${{ steps.release.outputs.minecraft_version }}
         run: |
           ./gradlew clean build \
+            -Dorg.gradle.java.home="$JAVA_HOME" \
             -Pminecraft_version="$MINECRAFT_VERSION" \
             -Pmapping_type=none \
             -Ploader_version=0.19.3 \

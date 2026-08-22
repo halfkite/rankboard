@@ -43,7 +43,7 @@ New-Item -ItemType Directory -Force $innerDirectory, $staging | Out-Null
 foreach ($variant in $variants) {
     Write-Host "Building RankBoard for Minecraft $($variant.Minecraft)..."
     $arguments = @(
-        "clean", "build", "-x", "remapSourcesJar", "--no-daemon",
+        "clean", "build", "--no-daemon",
         "-Pminecraft_version=$($variant.Minecraft)",
         "-Pmapping_type=none",
         "-Ploader_version=0.19.3",

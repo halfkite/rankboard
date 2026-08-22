@@ -32,7 +32,7 @@ jobs:
       matrix:
         include:
           - target: 1.21.x
-            java: '21'
+            java: '25'
           - target: 26.1.x
             java: '25'
           - target: 26.2

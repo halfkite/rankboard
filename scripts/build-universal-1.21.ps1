@@ -1,5 +1,6 @@
 param(
-    [string]$OutputDirectory = "build/libs"
+    [string]$OutputDirectory = "build/libs",
+    [string]$ModVersion = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -7,14 +8,22 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 Add-Type -AssemblyName System.IO.Compression
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$gradle = Join-Path $projectRoot "gradlew.bat"
+$gradle = if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) {
+    Join-Path $projectRoot "gradlew.bat"
+} else {
+    Join-Path $projectRoot "gradlew"
+}
 $properties = Get-Content (Join-Path $projectRoot "gradle.properties") |
     Where-Object { $_ -match "^[^#=]+=.*$" } |
     ForEach-Object {
         $parts = $_ -split "=", 2
         @{ Key = $parts[0].Trim(); Value = $parts[1].Trim() }
     }
-$modVersion = ($properties | Where-Object { $_.Key -eq "mod_version" }).Value
+$modVersion = if ([string]::IsNullOrWhiteSpace($ModVersion)) {
+    ($properties | Where-Object { $_.Key -eq "mod_version" }).Value
+} else {
+    $ModVersion
+}
 $timestamp = Get-Date -Format "yyMMddHHmm"
 $work = Join-Path $projectRoot ".rankboard-wrapper-work"
 $innerDirectory = Join-Path $work "META-INF/jars"
@@ -121,7 +130,8 @@ foreach ($variant in $variants) {
         "-Pyarn_mappings=$($variant.Mappings)",
         "-Pminecraft_dependency=$($variant.Range)",
         "-Ploader_version=0.15.11",
-        "-Pfabric_version=$($variant.Fabric)"
+        "-Pfabric_version=$($variant.Fabric)",
+        "-Pmod_version=$modVersion"
     )
     & $gradle @arguments
     if ($LASTEXITCODE -ne 0) {

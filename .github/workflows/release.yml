@@ -1,4 +1,4 @@
-name: Build and publish RankBoard
+name: Build and publish RankBoard Fabric
 
 on:
   workflow_dispatch:
@@ -7,10 +7,6 @@ on:
         description: Release version (for example 1.9.0)
         required: true
         default: 1.9.0
-      minecraft_version:
-        description: Minecraft version to build
-        required: true
-        default: 26.2
       version_type:
         description: Release channel
         required: true
@@ -19,7 +15,7 @@ on:
           - beta
           - release
           - alpha
-        default: beta
+        default: release
   push:
     tags:
       - release-*
@@ -28,11 +24,19 @@ permissions:
   contents: write
 
 jobs:
-  build-and-publish:
+  build:
+    name: Build Fabric ${{ matrix.target }}
     runs-on: ubuntu-latest
-    env:
-      MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
-      CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: 1.21.x
+            java: '21'
+          - target: 26.1.x
+            java: '25'
+          - target: 26.2
+            java: '25'
 
     steps:
       - name: Check out source
@@ -43,7 +47,6 @@ jobs:
         shell: bash
         env:
           INPUT_VERSION: ${{ inputs.version }}
-          INPUT_MINECRAFT: ${{ inputs.minecraft_version }}
           INPUT_VERSION_TYPE: ${{ inputs.version_type }}
         run: |
           if [[ -n "$INPUT_VERSION" ]]; then
@@ -51,31 +54,42 @@ jobs:
           else
             version="${GITHUB_REF_NAME#release-}"
           fi
-          minecraft="${INPUT_MINECRAFT:-26.2}"
-          version_type="${INPUT_VERSION_TYPE:-beta}"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "minecraft_version=$minecraft" >> "$GITHUB_OUTPUT"
-          echo "version_type=$version_type" >> "$GITHUB_OUTPUT"
+          echo "version_type=${INPUT_VERSION_TYPE:-release}" >> "$GITHUB_OUTPUT"
 
-      - name: Set up Java 25
+      - name: Set up Java
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: ${{ matrix.java }}
           cache: gradle
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build Fabric artifact
+      - name: Build 1.21.x wrapper
+        if: matrix.target == '1.21.x'
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: ./scripts/build-universal-1.21.ps1 -OutputDirectory release -ModVersion $env:VERSION
+
+      - name: Build 26.1.x wrapper
+        if: matrix.target == '26.1.x'
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: ./scripts/build-wrapper-26.1.ps1 -OutputDirectory release -ModVersion $env:VERSION
+
+      - name: Build 26.2 artifact
+        if: matrix.target == '26.2'
         shell: bash
         env:
           VERSION: ${{ steps.release.outputs.version }}
-          MINECRAFT_VERSION: ${{ steps.release.outputs.minecraft_version }}
         run: |
           ./gradlew clean build \
             -Dorg.gradle.java.home="$JAVA_HOME" \
-            -Pminecraft_version="$MINECRAFT_VERSION" \
+            -Pminecraft_version=26.2 \
             -Pmapping_type=none \
             -Ploader_version=0.19.3 \
             -Pfabric_version=0.157.0+26.2 \
@@ -84,23 +98,85 @@ jobs:
           artifact="$(find build/libs -maxdepth 1 -type f -name 'rankboard-*.jar' ! -name '*-sources.jar' | head -n 1)"
           test -n "$artifact"
           cp "$artifact" release/
-          sha256sum release/*.jar | tee release/SHA256SUMS
+
+      - name: Create checksum
+        shell: bash
+        run: sha256sum release/*.jar | tee release/SHA256SUMS
+
+      - name: Upload built artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fabric-${{ matrix.target }}
+          path: release
+          if-no-files-found: error
+
+  publish:
+    name: Publish Fabric ${{ matrix.target }}
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - target: 1.21.x
+            game_versions: |
+              1.21
+              1.21.1
+              1.21.2
+              1.21.3
+              1.21.4
+              1.21.5
+              1.21.6
+              1.21.7
+              1.21.8
+              1.21.9
+              1.21.10
+              1.21.11
+          - target: 26.1.x
+            game_versions: |
+              26.1
+              26.1.1
+              26.1.2
+          - target: 26.2
+            game_versions: 26.2
+
+    steps:
+      - name: Resolve release metadata
+        id: release
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_VERSION_TYPE: ${{ inputs.version_type }}
+        run: |
+          if [[ -n "$INPUT_VERSION" ]]; then
+            version="$INPUT_VERSION"
+          else
+            version="${GITHUB_REF_NAME#release-}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "version_type=${INPUT_VERSION_TYPE:-release}" >> "$GITHUB_OUTPUT"
+
+      - name: Download built artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: fabric-${{ matrix.target }}
+          path: release
 
       - name: Publish GitHub, Modrinth, and CurseForge
         uses: Kira-NT/mc-publish@v3
         with:
           files: release/*.jar
-          name: RankBoard ${{ steps.release.outputs.version }} Fabric ${{ steps.release.outputs.minecraft_version }}
+          name: RankBoard ${{ steps.release.outputs.version }} Fabric ${{ matrix.target }}
           version: ${{ steps.release.outputs.version }}
           version-type: ${{ steps.release.outputs.version_type }}
           loaders: fabric
-          game-versions: ${{ steps.release.outputs.minecraft_version }}
+          game-versions: ${{ matrix.game_versions }}
           environment: server
           changelog: |
-            RankBoard ${{ steps.release.outputs.version }} Fabric ${{ steps.release.outputs.minecraft_version }}.
+            RankBoard ${{ steps.release.outputs.version }} Fabric ${{ matrix.target }}.
 
-            Includes the Issue #4 scoreboard compatibility fix: UUID-derived score holders,
-            current display names after renaming, and a visible local-player sidebar entry.
+            Includes the Issue #4 scoreboard compatibility fix and the latest bilingual Help and web features.
           modrinth-id: TcDzE8EJ
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           curseforge-id: 1663124
@@ -111,8 +187,8 @@ jobs:
           retry-attempts: 3
           retry-delay: 15000
 
-      - name: Upload checksum to GitHub Actions
+      - name: Publish checksum
         uses: actions/upload-artifact@v4
         with:
-          name: rankboard-${{ steps.release.outputs.version }}-${{ steps.release.outputs.minecraft_version }}-checksums
+          name: fabric-${{ matrix.target }}-checksums
           path: release/SHA256SUMS

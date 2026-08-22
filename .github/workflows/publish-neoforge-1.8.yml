@@ -1,0 +1,65 @@
+name: Publish RankBoard NeoForge 1.8.0 to CurseForge
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: NeoForge 1.8.0 ${{ matrix.minecraft }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - minecraft: 1.21.1
+            file: rankboard-1.8.0+neoforge+mc1.21.1.jar
+          - minecraft: 1.21.4
+            file: rankboard-1.8.0+neoforge+mc1.21.4.jar
+          - minecraft: 1.21.8
+            file: rankboard-1.8.0+neoforge+mc1.21.8.jar
+          - minecraft: 1.21.11
+            file: rankboard-1.8.0+neoforge+mc1.21.11.jar
+          - minecraft: 26.1
+            file: rankboard-1.8.0+neoforge+mc26.1.jar
+          - minecraft: 26.1.1
+            file: rankboard-1.8.0+neoforge+mc26.1.1.jar
+          - minecraft: 26.1.2
+            file: rankboard-1.8.0+neoforge+mc26.1.2.jar
+          - minecraft: 26.2
+            file: rankboard-1.8.0+neoforge+mc26.2.jar
+
+    steps:
+      - name: Download verified NeoForge 1.8.0 artifact
+        shell: bash
+        env:
+          FILE_NAME: ${{ matrix.file }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p release
+          gh release download neoforge1.8.0 \
+            --repo halfkite/rankboard \
+            --pattern "${FILE_NAME}" \
+            --dir release
+          sha256sum "release/${FILE_NAME}" | tee "release/${FILE_NAME}.sha256"
+
+      - name: Publish to CurseForge
+        uses: Kira-NT/mc-publish@v3
+        with:
+          files: release/${{ matrix.file }}
+          name: RankBoard 1.8.0 NeoForge ${{ matrix.minecraft }}
+          version: 1.8.0
+          version-type: release
+          loaders: neoforge
+          game-versions: ${{ matrix.minecraft }}
+          environment: server
+          changelog: |
+            RankBoard 1.8.0 NeoForge for Minecraft ${{ matrix.minecraft }}.
+            Existing verified NeoForge artifact published through GitHub Actions.
+          curseforge-id: 1663124
+          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
+          retry-attempts: 3
+          retry-delay: 15000

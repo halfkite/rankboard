@@ -106,7 +106,9 @@ jobs:
       matrix:
         include:
           - target: 1.21.x
-            java: '21'
+            # Current Fabric Loom alpha used by the shared build requires a Java 25 runtime.
+            # This does not change the Minecraft 1.21 server/runtime requirement.
+            java: '25'
           - target: 26.1.x
             java: '25'
           - target: 26.2

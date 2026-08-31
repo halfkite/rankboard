@@ -51,6 +51,7 @@ final class WebDashboard {
     private static byte[] websiteIconBytes;
     private static String websiteIconContentType = "application/octet-stream";
     private static String websiteIconVersion = "none";
+    private static String webDefaultLanguage = "zh_cn";
     private static int dataRequestsPerSecond = 1;
     private static int iconRequestIntervalSeconds = 3;
     private static int rankingRefreshIntervalSeconds = 30;
@@ -91,6 +92,7 @@ final class WebDashboard {
             iconRequestIntervalSeconds = Integer.parseInt(config.getProperty("web-icon-request-interval-seconds", "3"));
             rankingRefreshIntervalSeconds = Integer.parseInt(config.getProperty("web-ranking-refresh-interval-seconds", "30"));
             serverName = resolveServerName(server, config.getProperty("server-name", "auto"));
+            webDefaultLanguage = config.getProperty("web-default-language", "zh_cn").strip().toLowerCase(java.util.Locale.ROOT);
             String configuredSwitcherName = config.getProperty("web-switcher-name", "auto").strip();
             switcherName = configuredSwitcherName.equalsIgnoreCase("auto") || configuredSwitcherName.isEmpty()
                     ? serverName : configuredSwitcherName;
@@ -131,6 +133,7 @@ final class WebDashboard {
         websiteIconBytes = null;
         websiteIconContentType = "application/octet-stream";
         websiteIconVersion = "none";
+        webDefaultLanguage = "zh_cn";
         webTheme = new Properties();
         switcherPeers = List.of();
         PEER_SNAPSHOTS.clear();
@@ -431,6 +434,7 @@ final class WebDashboard {
                 webTheme.getProperty("web-theme-follow-icon", "true")));
         root.addProperty("themeBase", webTheme.getProperty("web-theme-base", "auto"));
         root.addProperty("iconVersion", websiteIconVersion);
+        root.addProperty("defaultLanguage", webDefaultLanguage);
         JsonObject theme = new JsonObject();
         for (String name : List.of("background", "surface", "primary", "secondary", "text", "muted",
                 "border", "success", "danger")) {

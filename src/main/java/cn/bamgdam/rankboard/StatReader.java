@@ -239,7 +239,6 @@ final class StatReader {
                 LeaderboardState.get(server).rollPeriods(server);
                 BoardService.restoreGlobal(server);
                 for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) BoardService.restore(player);
-                BoardService.refreshAll(server);
                 WebDashboard.invalidateRankings();
             });
         } catch (InterruptedException exception) {

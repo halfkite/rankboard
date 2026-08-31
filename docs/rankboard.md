@@ -125,6 +125,14 @@ OP 可控制轮播标题是否跟随当前榜单颜色：
 /leaderboard lookmenu status    查看状态
 ```
 
+进服时自动弹出的排行榜菜单可以单独关闭，不影响手动输入 `/leaderboard`：
+
+```text
+/leaderboard joinmenu false     关闭自己的进服排行榜菜单
+/leaderboard joinmenu true      重新开启
+/leaderboard joinmenu status    查看个人与全服开关状态
+```
+
 ### 聊天栏查询排行榜
 
 ```text
@@ -163,6 +171,7 @@ OP 可控制轮播标题是否跟随当前榜单颜色：
 /leaderboard help web                   网页与配置
 /leaderboard help admin                 OP 管理指令（仅 OP）
 /leaderboard help config                完整配置说明（仅 OP）
+/leaderboard language default <语言>    OP 设置全服默认聊天语言
 ```
 
 帮助中的每条指令都可以点击直接填入聊天栏。
@@ -182,6 +191,7 @@ OP 可控制轮播标题是否跟随当前榜单颜色：
 | `/leaderboard display off` | 关闭个人客户端侧边栏 |
 | `/leaderboard carousel <true\|false\|status>` | 控制榜单轮播 |
 | `/leaderboard lookmenu <true\|false\|status>` | 控制抬头+蹲起菜单 |
+| `/leaderboard joinmenu <true\|false\|status>` | 控制自己的进服排行榜菜单；不影响手动打开 |
 
 ### 管理员指令
 
@@ -238,6 +248,7 @@ history-scan-threads=0                      # 扫描线程；0 自动，最多�
 # --- 进服提示 ---
 welcome-enabled=true                        # 玩家进服时发送欢迎语
 welcome-name=auto                           # 欢迎语服务器名；auto 自动读取
+default-language=zh_cn                      # 全服默认聊天语言；新玩家和全服设置后使用
 join-menu-enabled=true                      # 玩家进服时换出聊天栏面板
 join-web-hint-enabled=false                 # 玩家进服时提示网页排行榜地址
 website-button-enabled=true                 # 菜单和帮助中是否显示 [打开网站]
@@ -316,6 +327,7 @@ port=8765                                 # 监听端口（范围 1-65535）
 # --- 网页显示 ---
 server-name=auto                           # 网页显示的服务器名；auto 自动读取
 website-icon=server-icon.png              # 服务器图标路径
+web-default-language=zh_cn                 # 网页默认语言；可选 zh_cn、en_us 或 auto（auto 跟随浏览器）
 
 # --- 网页切换 ---
 web-switcher-name=auto                     # 切换按钮名称；auto 使用网页服务器名
@@ -382,6 +394,12 @@ GET /api/rankings?metric=playtime&from=2026-07-16&to=2026-07-20
 
 超过限制返回 HTTP `429` 和 `Retry-After`。OP 可以使用 `/leaderboard ratelimit clear` 清除所有累计冷却。
 
+### 语言设置
+
+`/leaderboard language zh_cn` 或 `/leaderboard language en_us` 只改变执行玩家的聊天提示语言。OP 设置自己的语言后会看到“设为全服默认”按钮；点击后执行 `/leaderboard language default <语言>`，将语言写入 `default-language`，并更新在线及已记录的玩家。未单独选择语言的新玩家会使用该默认值。
+
+网页默认语言仍由 `web-default-language` 独立控制；网页访客自己的切换会保存在浏览器中，不会修改服务器配置。
+
 ## 多服务器网页切换
 
 多个 RankBoard 网页可通过 `/leaderboard webswitch add <IP|域名|网址>` 加入左侧切换列表。地址未写端口时使用当前网页端口；相同 IP 和端口会自动合并。
@@ -410,3 +428,12 @@ gradlew.bat build
 构建产物位于 `build/libs/`。发布版本和 Minecraft 版本会写入 JAR 文件名。
 
 多版本构建结果位于 `multi-version-builds/`，每次成功构建也会单独归档到 `mod-builds/` 的时间戳目录。
+
+## GitHub Actions 发布
+
+先在 GitHub 创建并发布 Release（标签建议使用 `1.9.1` 或 `v1.9.1`）。发布事件会触发两个相互独立的流程：
+
+- `.github/workflows/release.yml` 只构建 Fabric。
+- `.github/workflows/release-neoforge.yml` 只构建 NeoForge。
+
+两个流程分别上传自己的 JAR 和 SHA-256 文件，并分别发布到 Modrinth 与 CurseForge。需要补发已有版本时，在对应流程选择 **Run workflow**，填写 Release 标签、发布目标和可选的版本筛选；Fabric 使用 `1.21.x`、`26.1.x`、`26.2`，NeoForge 使用 `1.21.1`、`26.1.2` 等具体目标。仓库需要配置 `MODRINTH_TOKEN`、`CURSEFORGE_TOKEN`；项目 ID 可用 Repository Variables 覆盖。

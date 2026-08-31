@@ -365,10 +365,23 @@ public final class LeaderboardState extends SavedData {
         if (!whitelistModeConfigured) { whitelistModeConfigured = true; setDirty(); }
     }
     public boolean needsLanguageChoice(UUID uuid) { return !playerLanguages.containsKey(uuid); }
-    public String language(UUID uuid) { return playerLanguages.getOrDefault(uuid, "zh_cn"); }
+    public String language(UUID uuid) {
+        return playerLanguages.getOrDefault(uuid, RankBoardConfig.get().defaultLanguage);
+    }
     public void setLanguage(UUID uuid, String language) {
         if (!language.matches("[a-z0-9_-]{2,32}")) throw new IllegalArgumentException("unsupported language");
         if (!language.equals(playerLanguages.put(uuid, language))) setDirty();
+    }
+    /** Applies a server-wide language choice to all known and currently online players. */
+    public int setLanguageForAll(MinecraftServer server, String language) {
+        Set<UUID> players = new HashSet<>(playerLanguages.keySet());
+        server.getPlayerList().getPlayers().forEach(player -> players.add(player.getUUID()));
+        boolean changed = false;
+        for (UUID uuid : players) {
+            if (!language.equals(playerLanguages.put(uuid, language))) changed = true;
+        }
+        if (changed) setDirty();
+        return players.size();
     }
 
     public RangeData range(MinecraftServer server, LocalDate from, LocalDate to,

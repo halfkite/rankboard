@@ -44,6 +44,7 @@ public final class LeaderboardState extends PersistentState {
     private final Set<RankBoardMod.Metric> disabledDisplayMetrics = new HashSet<>();
     private final Set<UUID> nameColorDisabledPlayers = new HashSet<>();
     private final Set<UUID> lookMenuDisabledPlayers = new HashSet<>();
+    private final Set<UUID> joinMenuDisabledPlayers = new HashSet<>();
     private final Map<UUID, String> playerLanguages = new HashMap<>();
     private final Map<UUID, BoardPreference> boardPreferences = new HashMap<>();
     private BoardPreference globalBoardPreference;
@@ -98,6 +99,10 @@ public final class LeaderboardState extends PersistentState {
         }
         for (NbtElement element : NbtCompat.getList(nbt, "lookMenuDisabledPlayers", NbtElement.STRING_TYPE)) {
             try { state.lookMenuDisabledPlayers.add(UUID.fromString(NbtCompat.asString(element))); }
+            catch (IllegalArgumentException ignored) { }
+        }
+        for (NbtElement element : NbtCompat.getList(nbt, "joinMenuDisabledPlayers", NbtElement.STRING_TYPE)) {
+            try { state.joinMenuDisabledPlayers.add(UUID.fromString(NbtCompat.asString(element))); }
             catch (IllegalArgumentException ignored) { }
         }
         for (NbtElement element : NbtCompat.getList(nbt, "playerLanguages", NbtElement.COMPOUND_TYPE)) {
@@ -163,6 +168,9 @@ public final class LeaderboardState extends PersistentState {
         NbtList disabledLookMenus = new NbtList();
         lookMenuDisabledPlayers.forEach(uuid -> disabledLookMenus.add(NbtString.of(uuid.toString())));
         nbt.put("lookMenuDisabledPlayers", disabledLookMenus);
+        NbtList disabledJoinMenus = new NbtList();
+        joinMenuDisabledPlayers.forEach(uuid -> disabledJoinMenus.add(NbtString.of(uuid.toString())));
+        nbt.put("joinMenuDisabledPlayers", disabledJoinMenus);
         NbtList languages = new NbtList();
         playerLanguages.forEach((uuid, language) -> {
             NbtCompound entry = new NbtCompound();
@@ -241,10 +249,23 @@ public final class LeaderboardState extends PersistentState {
         if (changed) markDirty();
     }
     public boolean needsLanguageChoice(UUID uuid) { return !playerLanguages.containsKey(uuid); }
-    public String language(UUID uuid) { return playerLanguages.getOrDefault(uuid, "zh_cn"); }
+    public String language(UUID uuid) {
+        return playerLanguages.getOrDefault(uuid, RankBoardConfig.get().defaultLanguage);
+    }
     public void setLanguage(UUID uuid, String language) {
         if (!language.matches("[a-z0-9_-]{2,32}")) throw new IllegalArgumentException("unsupported language");
         if (!language.equals(playerLanguages.put(uuid, language))) markDirty();
+    }
+    /** Applies a server-wide language choice to all known and currently online players. */
+    public int setLanguageForAll(MinecraftServer server, String language) {
+        Set<UUID> players = new HashSet<>(playerLanguages.keySet());
+        server.getPlayerManager().getPlayerList().forEach(player -> players.add(player.getUuid()));
+        boolean changed = false;
+        for (UUID uuid : players) {
+            if (!language.equals(playerLanguages.put(uuid, language))) changed = true;
+        }
+        if (changed) markDirty();
+        return players.size();
     }
     public long getBaseline(RankBoardMod.Period period, UUID uuid, RankBoardMod.Metric metric) {
         PeriodData data = periods.get(period);
@@ -315,6 +336,12 @@ public final class LeaderboardState extends PersistentState {
     public boolean isLookMenuEnabled(UUID uuid) { return !lookMenuDisabledPlayers.contains(uuid); }
     public void setLookMenuEnabled(UUID uuid, boolean enabled) {
         boolean changed = enabled ? lookMenuDisabledPlayers.remove(uuid) : lookMenuDisabledPlayers.add(uuid);
+        if (changed) markDirty();
+    }
+
+    public boolean isJoinMenuEnabled(UUID uuid) { return !joinMenuDisabledPlayers.contains(uuid); }
+    public void setJoinMenuEnabled(UUID uuid, boolean enabled) {
+        boolean changed = enabled ? joinMenuDisabledPlayers.remove(uuid) : joinMenuDisabledPlayers.add(uuid);
         if (changed) markDirty();
     }
 

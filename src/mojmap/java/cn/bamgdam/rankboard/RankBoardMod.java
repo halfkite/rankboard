@@ -135,6 +135,8 @@ public final class RankBoardMod implements ModInitializer {
         root.then(Commands.literal("language")
                 .executes(context -> languageStatus(context.getSource()))
                 .then(Commands.literal("status").executes(context -> languageStatus(context.getSource())))
+                .then(languageDefaultCommand("default"))
+                .then(languageDefaultCommand("global"))
                 .then(Commands.argument("code", StringArgumentType.word())
                         .suggests((context, builder) -> SharedSuggestionProvider.suggest(RankBoardLanguage.codes(), builder))
                         .executes(context -> setLanguage(context.getSource(), StringArgumentType.getString(context, "code")))));
@@ -413,6 +415,8 @@ public final class RankBoardMod implements ModInitializer {
         switch (group) {
             case "player" -> {
                 helpCommand(source, "/leaderboard language <zh_cn|en_us|status>", "/leaderboard language ", "选择聊天提示语言");
+                if (op) helpCommand(source, "/leaderboard language default <语言>", "/leaderboard language default ",
+                        "OP 设置全服默认聊天语言；会更新在线和已记录玩家");
                 helpCommand(source, "/leaderboard", "/leaderboard", "打开排行榜菜单");
                 helpCommand(source, "/leaderboard mine", "/leaderboard mine", "查询所有个人统计并显示总览");
                 helpCommand(source, "/leaderboard mine <all|day|week|month>", "/leaderboard mine ", "查询指定周期的个人统计");
@@ -433,6 +437,8 @@ public final class RankBoardMod implements ModInitializer {
                     source.sendSuccess(() -> websiteButton(source), false);
                 }
                 helpCommand(source, "/leaderboard config set web-public-address <地址|auto>", "/leaderboard config set web-public-address ", "设置网站按钮打开的地址，默认 127.0.0.1:8765");
+                if (op) helpCommand(source, "/leaderboard config set web-default-language <zh_cn|en_us|auto>",
+                        "/leaderboard config set web-default-language ", "设置网页默认语言");
                 helpCommand(source, "/leaderboard config set website-button-enabled <true|false>", "/leaderboard config set website-button-enabled ", "显示或隐藏菜单和帮助中的网站按钮");
                 if (op) helpCommand(source, "/leaderboard webtheme <icon|blue|rgb #RRGGBB|true|false|status>",
                         "/leaderboard webtheme ", "选择图标自动取色、默认蓝色或 RGB 网页主题");
@@ -907,12 +913,12 @@ public final class RankBoardMod implements ModInitializer {
         sendLanguagePrompt(player);
         RankBoardConfig config = RankBoardConfig.get();
         if (config.welcomeEnabled) {
-            player.sendSystemMessage(Component.literal("欢迎来到 ").withStyle(ChatFormatting.GRAY)
-                    .append(Component.literal(config.displayName(PlayerCompat.server(player))).withStyle(ChatFormatting.GOLD)), false);
+            player.sendSystemMessage(Component.literal(RankBoardLanguage.text(player, "welcome",
+                    config.displayName(PlayerCompat.server(player)))).withStyle(ChatFormatting.GRAY), false);
         }
         if (config.joinWebHintEnabled) {
-            player.sendSystemMessage(Component.literal("可在 " + config.webAddress(PlayerCompat.server(player)) + " 查看网页排行榜。")
-                    .withStyle(ChatFormatting.AQUA), false);
+            player.sendSystemMessage(Component.literal(RankBoardLanguage.text(player, "web_hint",
+                    config.webAddress(PlayerCompat.server(player)))).withStyle(ChatFormatting.AQUA), false);
         }
         if (config.joinMenuEnabled) menu(player.createCommandSourceStack());
     }
@@ -927,11 +933,53 @@ public final class RankBoardMod implements ModInitializer {
             LeaderboardState.get(source.getServer()).setLanguage(player.getUUID(), code);
             source.sendSuccess(() -> Component.literal(RankBoardLanguage.text(player, "language.selected",
                     RankBoardLanguage.text(player, "language.name"))), false);
+            if (CommandPermissionCompat.has(source, 2)) {
+                player.sendSystemMessage(languageDefaultPrompt(player, code), false);
+            }
             return 1;
         } catch (com.mojang.brigadier.exceptions.CommandSyntaxException exception) {
             source.sendFailure(Component.literal("该命令只能由玩家执行。"));
             return 0;
         }
+    }
+
+    private LiteralArgumentBuilder<CommandSourceStack> languageDefaultCommand(String literal) {
+        return Commands.literal(literal)
+                .requires(source -> CommandPermissionCompat.has(source, 2))
+                .then(Commands.argument("code", StringArgumentType.word())
+                        .suggests((context, builder) -> SharedSuggestionProvider.suggest(RankBoardLanguage.codes(), builder))
+                        .executes(context -> setDefaultLanguage(context.getSource(),
+                                StringArgumentType.getString(context, "code").toLowerCase(java.util.Locale.ROOT))));
+    }
+
+    private int setDefaultLanguage(CommandSourceStack source, String language) {
+        if (!RankBoardLanguage.exists(language)) {
+            source.sendFailure(Component.literal("未知语言包 / Unknown language pack: " + language));
+            return 0;
+        }
+        try {
+            String normalized = RankBoardConfig.set(source.getServer(), "default-language", language);
+            int players = LeaderboardState.get(source.getServer()).setLanguageForAll(source.getServer(), normalized);
+            BoardService.refreshAll(source.getServer());
+            source.sendSuccess(() -> Component.literal("全服默认聊天语言已设置为 " + normalized
+                    + "，已更新 " + players + " 位玩家 / Server-wide default chat language set to "
+                    + normalized + " for " + players + " players.").withStyle(ChatFormatting.GREEN), true);
+            return 1;
+        } catch (IllegalArgumentException | java.io.IOException exception) {
+            source.sendFailure(Component.literal("全服默认语言设置失败 / Failed to set server default language: "
+                    + exception.getMessage()));
+            return 0;
+        }
+    }
+
+    private static Component languageDefaultPrompt(ServerPlayer player, String language) {
+        String label = language.equalsIgnoreCase("en_us") ? "English"
+                : language.equalsIgnoreCase("zh_cn") ? "中文" : language;
+        return Component.literal(RankBoardLanguage.text(player, "language.default_prompt", label)).withStyle(ChatFormatting.GRAY)
+                .copy().append(Component.literal(" "))
+                .append(clickable("[" + RankBoardLanguage.text(player, "language.default_button") + "]",
+                        ChatFormatting.GREEN, "/leaderboard language default " + language,
+                        RankBoardLanguage.text(player, "language.default_tooltip")));
     }
 
     private int languageStatus(CommandSourceStack source) {

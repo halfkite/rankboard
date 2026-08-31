@@ -1,6 +1,6 @@
-name: Publish RankBoard Fabric
+name: Publish RankBoard NeoForge
 
-run-name: Publish RankBoard Fabric ${{ github.event.release.tag_name || inputs.tag }}
+run-name: Publish RankBoard NeoForge ${{ github.event.release.tag_name || inputs.tag }}
 
 on:
   release:
@@ -21,7 +21,7 @@ on:
           - modrinth
           - curseforge
       versions:
-        description: Fabric targets to rebuild (comma-separated or all)
+        description: NeoForge targets to rebuild (comma-separated or all)
         required: false
         type: string
         default: all
@@ -31,7 +31,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: publish-fabric-${{ github.event.release.tag_name || inputs.tag }}
+  group: publish-neoforge-${{ github.event.release.tag_name || inputs.tag }}
   cancel-in-progress: false
 
 jobs:
@@ -76,7 +76,7 @@ jobs:
 
           version="$tag"
           version="${version#release-}"
-          version="${version#fabric-}"
+          version="${version#neoforge-}"
           version="${version#v}"
           if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
             echo "Could not derive a semantic version from tag '$tag'." >&2
@@ -97,7 +97,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
   build:
-    name: Build Fabric ${{ matrix.target }}
+    name: Build NeoForge ${{ matrix.target }}
     needs: inspect
     if: ${{ needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), format(',{0},', matrix.target)) }}
     runs-on: ubuntu-latest
@@ -106,11 +106,37 @@ jobs:
       max-parallel: 1
       matrix:
         include:
-          - target: 1.21.x
+          - target: 1.21.1
+            minecraft: 1.21.1
+            neo_version: 21.1.241
             java: '21'
-          - target: 26.1.x
+          - target: 1.21.4
+            minecraft: 1.21.4
+            neo_version: 21.4.157
+            java: '21'
+          - target: 1.21.8
+            minecraft: 1.21.8
+            neo_version: 21.8.54
+            java: '21'
+          - target: 1.21.11
+            minecraft: 1.21.11
+            neo_version: 21.11.44
+            java: '21'
+          - target: 26.1
+            minecraft: 26.1
+            neo_version: 26.1.0.19-beta
+            java: '25'
+          - target: 26.1.1
+            minecraft: 26.1.1
+            neo_version: 26.1.1.15-beta
+            java: '25'
+          - target: 26.1.2
+            minecraft: 26.1.2
+            neo_version: 26.1.2.94
             java: '25'
           - target: 26.2
+            minecraft: 26.2
+            neo_version: 26.2.0.41-beta
             java: '25'
     steps:
       - name: Check out Release source
@@ -136,61 +162,36 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build 1.21.x wrapper
-        if: matrix.target == '1.21.x'
-        shell: pwsh
-        env:
-          VERSION: ${{ needs.inspect.outputs.version }}
-        run: ./scripts/build-universal-1.21.ps1 -OutputDirectory release -ModVersion $env:VERSION
-
-      - name: Build 26.1.x wrapper
-        if: matrix.target == '26.1.x'
-        shell: pwsh
-        env:
-          VERSION: ${{ needs.inspect.outputs.version }}
-        run: ./scripts/build-wrapper-26.1.ps1 -OutputDirectory release -ModVersion $env:VERSION
-
-      - name: Build 26.2 artifact
-        if: matrix.target == '26.2'
+      - name: Build NeoForge artifact
         shell: bash
         env:
           VERSION: ${{ needs.inspect.outputs.version }}
-        run: |
-          ./gradlew clean build --no-daemon \
-            -Dorg.gradle.java.home="$JAVA_HOME" \
-            -Pminecraft_version=26.2 \
-            -Pmapping_type=none \
-            -Ploader_version=0.19.3 \
-            -Pfabric_version=0.157.0+26.2 \
-            -Pmod_version="$VERSION"
-          mkdir -p release
-          artifact="$(find build/libs -maxdepth 1 -type f -name 'rankboard-*.jar' ! -name '*-sources.jar' | head -n 1)"
-          test -n "$artifact"
-          output="release/rankboard-${VERSION}+fabric+mc26.2.jar"
-          mv "$artifact" "$output"
-
-      - name: Normalize artifact name and create checksum
-        shell: bash
-        env:
-          VERSION: ${{ needs.inspect.outputs.version }}
+          MINECRAFT: ${{ matrix.minecraft }}
+          NEO_VERSION: ${{ matrix.neo_version }}
           TARGET: ${{ matrix.target }}
         run: |
-          artifact="$(find release -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' | head -n 1)"
+          ./gradlew -p neoforge clean build --no-daemon --console=plain \
+            -Dorg.gradle.java.home="$JAVA_HOME" \
+            -Pminecraft_version="$MINECRAFT" \
+            -Pneo_version="$NEO_VERSION" \
+            -Pmod_version="$VERSION"
+          mkdir -p release
+          artifact="$(find neoforge/build/libs -maxdepth 1 -type f -name 'rankboard-*.jar' ! -name '*-sources.jar' | head -n 1)"
           test -n "$artifact"
-          output="release/rankboard-${VERSION}+fabric+mc${TARGET}.jar"
-          if [[ "$artifact" != "$output" ]]; then mv "$artifact" "$output"; fi
+          output="release/rankboard-${VERSION}+neoforge+mc${TARGET}.jar"
+          mv "$artifact" "$output"
           sha256sum "$output" > "$output.sha256"
 
-      - name: Upload Fabric build artifact
+      - name: Upload NeoForge build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: fabric-${{ matrix.target }}
+          name: neoforge-${{ matrix.target }}
           path: release
           if-no-files-found: error
           retention-days: 14
 
   publish:
-    name: Publish Fabric ${{ matrix.target }}
+    name: Publish NeoForge ${{ matrix.target }}
     needs: [inspect, build]
     if: ${{ needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), format(',{0},', matrix.target)) }}
     runs-on: ubuntu-latest
@@ -199,73 +200,68 @@ jobs:
       max-parallel: 1
       matrix:
         include:
-          - target: 1.21.x
-            game_versions: |
-              1.21
-              1.21.1
-              1.21.2
-              1.21.3
-              1.21.4
-              1.21.5
-              1.21.6
-              1.21.7
-              1.21.8
-              1.21.9
-              1.21.10
-              1.21.11
-          - target: 26.1.x
-            game_versions: |
-              26.1
-              26.1.1
-              26.1.2
+          - target: 1.21.1
+            game_version: 1.21.1
+          - target: 1.21.4
+            game_version: 1.21.4
+          - target: 1.21.8
+            game_version: 1.21.8
+          - target: 1.21.11
+            game_version: 1.21.11
+          - target: 26.1
+            game_version: 26.1
+          - target: 26.1.1
+            game_version: 26.1.1
+          - target: 26.1.2
+            game_version: 26.1.2
           - target: 26.2
-            game_versions: 26.2
+            game_version: 26.2
     steps:
-      - name: Download Fabric build artifact
+      - name: Download NeoForge build artifact
         uses: actions/download-artifact@v4
         with:
-          name: fabric-${{ matrix.target }}
+          name: neoforge-${{ matrix.target }}
           path: release
 
-      - name: Upload Fabric assets to GitHub Release
+      - name: Upload NeoForge assets to GitHub Release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.inspect.outputs.tag }}
         run: gh release upload "$RELEASE_TAG" release/*.jar release/*.sha256 --repo "$GITHUB_REPOSITORY" --clobber
 
-      - name: Publish Fabric to Modrinth
+      - name: Publish NeoForge to Modrinth
         if: ${{ needs.inspect.outputs.destinations == 'all' || needs.inspect.outputs.destinations == 'modrinth' }}
         uses: Kira-NT/mc-publish@v3
         with:
           files: release/*.jar
-          name: RankBoard ${{ needs.inspect.outputs.version }} Fabric ${{ matrix.target }}
+          name: RankBoard ${{ needs.inspect.outputs.version }} NeoForge ${{ matrix.target }}
           version: ${{ needs.inspect.outputs.version }}
           version-type: ${{ needs.inspect.outputs.version_type }}
-          loaders: fabric
-          game-versions: ${{ matrix.game_versions }}
+          loaders: neoforge
+          game-versions: ${{ matrix.game_version }}
           environment: server
           changelog: |
             完善多语言
-          modrinth-id: ${{ vars.MODRINTH_PROJECT_ID || 'TcDzE8EJ' }}
+          modrinth-id: ${{ vars.MODRINTH_NEOFORGE_PROJECT_ID || vars.MODRINTH_PROJECT_ID || 'TcDzE8EJ' }}
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           retry-attempts: 3
           retry-delay: 15000
 
-      - name: Publish Fabric to CurseForge
+      - name: Publish NeoForge to CurseForge
         if: ${{ needs.inspect.outputs.destinations == 'all' || needs.inspect.outputs.destinations == 'curseforge' }}
         uses: Kira-NT/mc-publish@v3
         with:
           files: release/*.jar
-          name: RankBoard ${{ needs.inspect.outputs.version }} Fabric ${{ matrix.target }}
+          name: RankBoard ${{ needs.inspect.outputs.version }} NeoForge ${{ matrix.target }}
           version: ${{ needs.inspect.outputs.version }}
           version-type: ${{ needs.inspect.outputs.version_type }}
-          loaders: fabric
-          game-versions: ${{ matrix.game_versions }}
+          loaders: neoforge
+          game-versions: ${{ matrix.game_version }}
           environment: server
           changelog: |
             完善多语言
-          curseforge-id: ${{ vars.CURSEFORGE_PROJECT_ID || '1663124' }}
+          curseforge-id: ${{ vars.CURSEFORGE_NEOFORGE_PROJECT_ID || vars.CURSEFORGE_PROJECT_ID || '1663124' }}
           curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
           retry-attempts: 3
           retry-delay: 15000

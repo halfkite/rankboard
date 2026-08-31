@@ -29,6 +29,7 @@ final class RankBoardConfig {
             option("history-scan-threads", "0", FileKind.MAIN, "历史统计", "历史统计扫描线程数；默认 0 自动使用最多 50% 可用处理器，手动值同样不会超过 50%。"),
             option("welcome-enabled", "true", FileKind.MAIN, "进服提示", "是否发送“欢迎来到”提示；默认 true。"),
             option("welcome-name", "auto", FileKind.MAIN, "进服提示", "欢迎语名称；默认 auto，自动读取服务器 MOTD 或单人存档名。"),
+            option("default-language", "zh_cn", FileKind.MAIN, "语言", "全服默认聊天语言；新玩家和 OP 确认全服默认后使用；可填写语言文件名，如 zh_cn 或 en_us。"),
             option("join-menu-enabled", "true", FileKind.MAIN, "进服提示", "玩家进服时是否显示 /leaderboard 菜单；默认 true。"),
             option("join-web-hint-enabled", "false", FileKind.MAIN, "进服提示", "玩家进服时是否提示网页排行榜地址；默认 false。"),
             option("web-public-address", "", FileKind.MAIN, "进服提示", "对玩家展示的网页地址；默认留空，根据网页 host 和 port 生成。"),
@@ -94,6 +95,7 @@ final class RankBoardConfig {
             option("web-icon-request-interval-seconds", "3", FileKind.WEB, "请求限流", "图片基础请求间隔秒数；默认 3。30 秒内超过 6 次后，固定 30 分钟改为每 15 秒 1 次。"),
             option("web-ranking-refresh-interval-seconds", "30", FileKind.WEB, "网页数据", "网页排行榜数据快照刷新间隔秒数；默认 30，范围 1-3600。"),
             option("server-name", "auto", FileKind.WEB, "网页显示", "网页显示的服务器名称；默认 auto，自动读取服务器 MOTD。"),
+            option("web-default-language", "zh_cn", FileKind.WEB, "网页显示", "网页默认语言；可选 zh_cn、en_us 或 auto（auto 跟随浏览器），默认 zh_cn。"),
             option("web-switcher-name", "auto", FileKind.WEB, "网页切换", "服务器切换按钮名称；auto 使用网页服务器名称。"),
             option("web-switcher-weight", "100", FileKind.WEB, "网页切换", "服务器切换按钮排序权重；数值越小越靠前，1 最先显示。"),
             option("web-switcher-peers", "", FileKind.WEB, "网页切换", "其他 RankBoard 网页地址，逗号分隔；省略端口时沿用当前网页端口。"),
@@ -140,6 +142,7 @@ final class RankBoardConfig {
     final boolean avatarCacheEnabled;
     final int avatarCacheDays;
     final String welcomeName;
+    final String defaultLanguage;
     final String webPublicAddress;
     final HelpVisibility helpVisibility;
 
@@ -170,6 +173,7 @@ final class RankBoardConfig {
         avatarCacheEnabled = bool(properties, "avatar-cache-enabled", true);
         avatarCacheDays = integer(properties, "avatar-cache-days", 7, 1, 365);
         welcomeName = properties.getProperty("welcome-name", "auto").strip();
+        defaultLanguage = configuredLanguageCode(properties.getProperty("default-language", "zh_cn"));
         webPublicAddress = properties.getProperty("web-public-address", "").strip();
         helpVisibility = HelpVisibility.parse(properties.getProperty("help-visibility", "all"));
     }
@@ -440,6 +444,13 @@ final class RankBoardConfig {
                 yield value;
             }
             case "welcome-name", "server-name", "web-switcher-name" -> value.isEmpty() ? "auto" : normalizedLabel(value);
+            case "default-language" -> languageCode(value, "zh_cn");
+            case "web-default-language" -> switch (value.toLowerCase(Locale.ROOT)) {
+                case "zh", "zh_cn", "zh-cn" -> "zh_cn";
+                case "en", "en_us", "en-us" -> "en_us";
+                case "auto" -> "auto";
+                default -> throw new IllegalArgumentException("可用值：zh_cn、en_us、auto");
+            };
             case "web-switcher-peers" -> normalizePeerList(value);
             case "web-public-address" -> value.equalsIgnoreCase("auto") ? "" : value;
             default -> value;
@@ -452,6 +463,24 @@ final class RankBoardConfig {
             case "false", "off", "no", "0" -> "false";
             default -> throw new IllegalArgumentException("布尔配置仅支持 true/false（也可使用 on/off）");
         };
+    }
+
+    private static String languageCode(String value, String fallback) {
+        String normalized = value == null ? "" : value.strip().toLowerCase(Locale.ROOT);
+        if (normalized.isEmpty()) return fallback;
+        if (!normalized.matches("[a-z0-9_-]{2,32}")) {
+            throw new IllegalArgumentException("语言代码只能包含 2-32 个字母、数字、下划线或连字符");
+        }
+        return normalized;
+    }
+
+    private static String configuredLanguageCode(String value) {
+        try {
+            return languageCode(value, "zh_cn");
+        } catch (IllegalArgumentException exception) {
+            RankBoardMod.LOGGER.warn("Invalid default-language '{}'; falling back to zh_cn", value);
+            return "zh_cn";
+        }
     }
 
     private static String normalizedColor(String value) {

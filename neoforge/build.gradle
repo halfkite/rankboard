@@ -182,9 +182,17 @@ sourceSets.main.java.setSrcDirs([
 tasks.named('compileJava').configure { dependsOn 'generateNeoForgeSources' }
 
 def npmExecutable = System.getProperty('os.name').toLowerCase().contains('windows') ? 'npm.cmd' : 'npm'
+tasks.register('webInstall', Exec) {
+    workingDir '../web'
+    inputs.files('../web/package.json', '../web/package-lock.json')
+    outputs.dir('../web/node_modules')
+    commandLine npmExecutable, 'ci'
+}
+
 tasks.register('webBuild', Exec) {
     workingDir '../web'
     commandLine npmExecutable, 'run', 'build'
+    dependsOn tasks.named('webInstall')
 }
 
 def generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {

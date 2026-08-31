@@ -55,6 +55,7 @@ final class WebDashboard {
     private static int iconRequestIntervalSeconds = 3;
     private static int rankingRefreshIntervalSeconds = 30;
     private static int webPort = 8765;
+    private static String webDefaultLanguage = "zh_cn";
     private static String switcherName = "Minecraft Server";
     private static int switcherWeight = 100;
     private static List<String> switcherPeers = List.of();
@@ -89,6 +90,7 @@ final class WebDashboard {
             iconRequestIntervalSeconds = Integer.parseInt(config.getProperty("web-icon-request-interval-seconds", "3"));
             rankingRefreshIntervalSeconds = Integer.parseInt(config.getProperty("web-ranking-refresh-interval-seconds", "30"));
             serverName = resolveServerName(server, config.getProperty("server-name", "auto"));
+            webDefaultLanguage = config.getProperty("web-default-language", "zh_cn").strip().toLowerCase(java.util.Locale.ROOT);
             String configuredSwitcherName = config.getProperty("web-switcher-name", "auto").strip();
             switcherName = configuredSwitcherName.equalsIgnoreCase("auto") || configuredSwitcherName.isEmpty()
                     ? serverName : configuredSwitcherName;
@@ -429,6 +431,7 @@ final class WebDashboard {
                 webTheme.getProperty("web-theme-follow-icon", "true")));
         root.addProperty("themeBase", webTheme.getProperty("web-theme-base", "auto"));
         root.addProperty("iconVersion", websiteIconVersion);
+        root.addProperty("defaultLanguage", webDefaultLanguage);
         JsonObject theme = new JsonObject();
         for (String name : List.of("background", "surface", "primary", "secondary", "text", "muted",
                 "border", "success", "danger")) {

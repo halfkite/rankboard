@@ -125,6 +125,14 @@ Enabled by default. When a player looks up (pitch above 60 degrees) and holds Sh
 /leaderboard lookmenu status    Check status
 ```
 
+The leaderboard menu shown automatically on join can be disabled independently. Manual `/leaderboard` still works:
+
+```text
+/leaderboard joinmenu false     Disable your leaderboard menu on join
+/leaderboard joinmenu true      Re-enable it
+/leaderboard joinmenu status    Check personal and global status
+```
+
 ### Chat Rankings
 
 ```text
@@ -163,6 +171,7 @@ Render mode can be `legacy` (nearest vanilla 16 colors) or `rgb` (exact RGB):
 /leaderboard help web                   Web and configuration
 /leaderboard help admin                 Operator management (OP only)
 /leaderboard help config                Full configuration reference (OP only)
+/leaderboard language default <language> OP: set the server-wide default chat language
 ```
 
 Every command in the help system is clickable and fills the chat input when clicked.
@@ -182,6 +191,7 @@ Every command in the help system is clickable and fills the chat input when clic
 | `/leaderboard display off` | Hide personal client sidebar |
 | `/leaderboard carousel <true\|false\|status>` | Toggle or inspect carousel rotation |
 | `/leaderboard lookmenu <true\|false\|status>` | Toggle or inspect the look-up+sneak menu |
+| `/leaderboard joinmenu <true\|false\|status>` | Toggle your leaderboard menu on join; manual opening still works |
 
 ### Operator Commands
 
@@ -238,6 +248,7 @@ history-scan-threads=0                      # Scanner threads; 0 is automatic, c
 # --- Join ---
 welcome-enabled=true                        # Send a welcome message on join
 welcome-name=auto                           # Welcome name; auto reads server data
+default-language=zh_cn                      # Server-wide default chat language for new/defaulted players
 join-menu-enabled=true                      # Open the chat ranking menu on join
 join-web-hint-enabled=false                 # Show the web-ranking address on join
 website-button-enabled=true                 # Show [Open Website] in menu and help
@@ -316,6 +327,7 @@ port=8765                                 # Port (range 1-65535)
 # --- Display ---
 server-name=auto                           # Server name on the web page; auto reads server data
 website-icon=server-icon.png              # Server icon path
+web-default-language=zh_cn                 # Default web language; supports zh_cn, en_us, or auto (follow browser)
 
 # --- Switcher ---
 web-switcher-name=auto                     # Switcher button name; auto uses the web server name
@@ -382,6 +394,12 @@ GET /api/rankings?metric=playtime&from=2026-07-16&to=2026-07-20
 
 Limited requests return HTTP `429` with `Retry-After`. Operators can clear all accumulated cooldowns with `/leaderboard ratelimit clear`.
 
+### Language settings
+
+`/leaderboard language zh_cn` or `/leaderboard language en_us` changes chat prompts for the executing player only. After an operator changes their own language, a **Set server default** button appears; it runs `/leaderboard language default <language>`, writes `default-language`, and updates online and known players. New players without a personal choice use this default.
+
+The web default remains controlled independently by `web-default-language`; a visitor's web toggle is stored in that browser and does not change server configuration.
+
 ## Multi-Server Web Switcher
 
 Add RankBoard sites to the left-side switcher with `/leaderboard webswitch add <IP|host|URL>`. Addresses without a port inherit the current web port, and entries resolving to the same IP and port are merged.
@@ -410,3 +428,12 @@ gradlew.bat build
 Artifacts are written to `build/libs/`. The JAR filename includes the mod and Minecraft versions.
 
 Multi-version results are collected under `multi-version-builds/`; every successful build is also archived in a timestamped directory under `mod-builds/`.
+
+## GitHub Actions publishing
+
+Create and publish a GitHub Release first (a tag such as `1.9.1` or `v1.9.1` is recommended). The published event starts two independent workflows:
+
+- `.github/workflows/release.yml` builds Fabric only.
+- `.github/workflows/release-neoforge.yml` builds NeoForge only.
+
+Each workflow uploads only its own JARs and SHA-256 files, then publishes that loader to Modrinth and CurseForge. To repair an existing release, select **Run workflow** in the matching workflow and enter the Release tag, destinations, and an optional version filter. Fabric filters use `1.21.x`, `26.1.x`, or `26.2`; NeoForge filters use concrete targets such as `1.21.1` or `26.1.2`. Configure `MODRINTH_TOKEN` and `CURSEFORGE_TOKEN` as repository secrets; project IDs can be overridden with Repository Variables.

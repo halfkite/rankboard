@@ -22,7 +22,12 @@ import java.util.concurrent.ConcurrentHashMap;
 final class RankBoardLanguage {
     private static final Map<String, String> ZH = Map.ofEntries(
             Map.entry("language.name", "中文"), Map.entry("language.prompt", "请选择语言"),
-            Map.entry("language.selected", "已选择 {0}。"), Map.entry("menu.help", "帮助"),
+            Map.entry("language.selected", "已选择 {0}。"),
+            Map.entry("language.default_prompt", "是否将 {0} 设为全服默认聊天语言？"),
+            Map.entry("language.default_button", "设为全服默认"),
+            Map.entry("language.default_tooltip", "将此语言应用到全服玩家并写入配置"),
+            Map.entry("language.default_set", "已将 {0} 设为全服默认聊天语言，更新了 {1} 位玩家。"),
+            Map.entry("help.click_to_fill", "点击填入指令栏"), Map.entry("menu.help", "帮助"),
             Map.entry("menu.website", "打开网站"), Map.entry("menu.scores", "查询分数"),
             Map.entry("menu.close_board", "关闭榜单"), Map.entry("menu.open_board", "开启榜单"),
             Map.entry("menu.close_look", "关闭抬头蹲起"), Map.entry("menu.open_look", "开启抬头蹲起"),
@@ -31,7 +36,12 @@ final class RankBoardLanguage {
             Map.entry("help.admin", "OP 管理"));
     private static final Map<String, String> EN = Map.ofEntries(
             Map.entry("language.name", "English"), Map.entry("language.prompt", "Select language"),
-            Map.entry("language.selected", "Language set to {0}."), Map.entry("menu.help", "Help"),
+            Map.entry("language.selected", "Language set to {0}."),
+            Map.entry("language.default_prompt", "Set {0} as the server-wide default chat language?"),
+            Map.entry("language.default_button", "Set server default"),
+            Map.entry("language.default_tooltip", "Apply this language to all players and save it to the config"),
+            Map.entry("language.default_set", "Set {0} as the server-wide default chat language for {1} players."),
+            Map.entry("help.click_to_fill", "Click to fill the chat command"), Map.entry("menu.help", "Help"),
             Map.entry("menu.website", "Open website"), Map.entry("menu.scores", "My scores"),
             Map.entry("menu.close_board", "Close board"), Map.entry("menu.open_board", "Open board"),
             Map.entry("menu.close_look", "Disable look menu"), Map.entry("menu.open_look", "Enable look menu"),

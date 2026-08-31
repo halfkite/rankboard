@@ -99,7 +99,6 @@ jobs:
   build:
     name: Build NeoForge ${{ matrix.target }}
     needs: inspect
-    if: ${{ needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), format(',{0},', matrix.target)) }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -163,6 +162,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build NeoForge artifact
+        if: ${{ needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), format(',{0},', matrix.target)) }}
         shell: bash
         env:
           VERSION: ${{ needs.inspect.outputs.version }}
@@ -183,6 +183,7 @@ jobs:
           sha256sum "$output" > "$output.sha256"
 
       - name: Upload NeoForge build artifact
+        if: ${{ needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), format(',{0},', matrix.target)) }}
         uses: actions/upload-artifact@v4
         with:
           name: neoforge-${{ matrix.target }}
@@ -193,7 +194,6 @@ jobs:
   publish:
     name: Publish NeoForge ${{ matrix.target }}
     needs: [inspect, build]
-    if: ${{ needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), format(',{0},', matrix.target)) }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -218,12 +218,14 @@ jobs:
             game_version: 26.2
     steps:
       - name: Download NeoForge build artifact
+        if: ${{ needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), format(',{0},', matrix.target)) }}
         uses: actions/download-artifact@v4
         with:
           name: neoforge-${{ matrix.target }}
           path: release
 
       - name: Upload NeoForge assets to GitHub Release
+        if: ${{ needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), format(',{0},', matrix.target)) }}
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -231,7 +233,7 @@ jobs:
         run: gh release upload "$RELEASE_TAG" release/*.jar release/*.sha256 --repo "$GITHUB_REPOSITORY" --clobber
 
       - name: Publish NeoForge to Modrinth
-        if: ${{ needs.inspect.outputs.destinations == 'all' || needs.inspect.outputs.destinations == 'modrinth' }}
+        if: ${{ (needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), format(',{0},', matrix.target))) && (needs.inspect.outputs.destinations == 'all' || needs.inspect.outputs.destinations == 'modrinth') }}
         uses: Kira-NT/mc-publish@v3
         with:
           files: release/*.jar
@@ -249,7 +251,7 @@ jobs:
           retry-delay: 15000
 
       - name: Publish NeoForge to CurseForge
-        if: ${{ needs.inspect.outputs.destinations == 'all' || needs.inspect.outputs.destinations == 'curseforge' }}
+        if: ${{ (needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), format(',{0},', matrix.target))) && (needs.inspect.outputs.destinations == 'all' || needs.inspect.outputs.destinations == 'curseforge') }}
         uses: Kira-NT/mc-publish@v3
         with:
           files: release/*.jar

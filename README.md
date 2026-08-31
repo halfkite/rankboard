@@ -1,6 +1,43 @@
 # RankBoard
 
-[中文](#中文) | [English](#english)
+[![License](https://img.shields.io/github/license/halfkite/rankboard)](https://choosealicense.com/licenses/mit/)
+[![Modrinth](https://img.shields.io/modrinth/dt/rankboard?color=00AF5C&label=Modrinth%20downloads&logo=modrinth)](https://modrinth.com/project/rankboard)
+[![CurseForge](https://img.shields.io/curseforge/dt/1663124?logo=curseforge&label=CurseForge%20downloads&color=f16436)](https://www.curseforge.com/minecraft/mc-mods/rankboard)
+[![MC Versions](https://cf.way2muchnoise.eu/versions/For%20MC_1663124_all.svg)](https://www.curseforge.com/minecraft/mc-mods/rankboard)
+[![GitHub](https://img.shields.io/github/downloads/halfkite/rankboard/total?color=161616&label=GitHub%20downloads&logo=github)](https://github.com/halfkite/rankboard/releases)
+
+**中文** | [English](#english)
+
+## 依赖
+
+| 名称 | 类型 | 链接 | 备注 |
+| --- | --- | --- | --- |
+| Fabric Loader | Fabric 必须 | [官方](https://fabricmc.net/use/installer/) | 1.21.x 使用 0.15.11+ |
+| Fabric API | Fabric 必须 | [官方](https://fabricmc.net/) | 与目标 Minecraft 版本匹配 |
+| NeoForge | NeoForge 必须 | [官方](https://neoforged.net/) | 安装对应游戏版本 |
+
+## 版本支持
+
+| 加载器 | 游戏版本 | 状态 | 最新 RankBoard |
+| --- | --- | --- | --- |
+| Fabric | 1.21–1.21.11 | 维护中 | 1.9.1 |
+| Fabric | 26.1、26.1.1、26.1.2 | 维护中 | 1.9.1 |
+| Fabric | 26.2 | 维护中 | 1.9.1 |
+| NeoForge | 1.21.1、1.21.4、1.21.8、1.21.11 | 维护中 | 1.9.1 |
+| NeoForge | 26.1、26.1.1、26.1.2、26.2 | 维护中 | 1.9.1 |
+
+## 文档
+
+- [中文完整文档](docs/rankboard.md)
+- [English documentation](docs/rankboard_en.md)
+
+## 下载
+
+- [Modrinth](https://modrinth.com/project/rankboard)
+- [CurseForge](https://www.curseforge.com/minecraft/mc-mods/rankboard)
+- [GitHub Releases](https://github.com/halfkite/rankboard/releases/latest)
+
+介绍页面的布局参考了 [Carpet-Igny-Addition](https://github.com/liuyuexiaoyu1/Carpet-Igny-Addition)。
 
 ---
 

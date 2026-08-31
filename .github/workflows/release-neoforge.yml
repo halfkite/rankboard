@@ -180,7 +180,8 @@ jobs:
           test -n "$artifact"
           output="release/rankboard-${VERSION}+neoforge+mc${TARGET}.jar"
           mv "$artifact" "$output"
-          sha256sum "$output" > "$output.sha256"
+          checksum="${output%.jar}.sha256"
+          sha256sum "$output" > "$checksum"
 
       - name: Upload NeoForge build artifact
         if: ${{ needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), format(',{0},', matrix.target)) }}

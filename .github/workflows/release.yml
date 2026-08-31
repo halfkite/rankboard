@@ -181,7 +181,8 @@ jobs:
           test -n "$artifact"
           output="release/rankboard-${VERSION}+fabric+mc${TARGET}.jar"
           if [[ "$artifact" != "$output" ]]; then mv "$artifact" "$output"; fi
-          sha256sum "$output" > "$output.sha256"
+          checksum="${output%.jar}.sha256"
+          sha256sum "$output" > "$checksum"
 
       - name: Upload Fabric build artifact
         if: ${{ needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), format(',{0},', matrix.target)) }}

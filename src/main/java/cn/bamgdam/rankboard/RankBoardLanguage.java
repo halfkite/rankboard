@@ -24,18 +24,24 @@ final class RankBoardLanguage {
             Map.entry("language.default_tooltip", "将此语言应用到全服玩家并写入配置"),
             Map.entry("language.default_set", "已将 {0} 设为全服默认聊天语言，更新了 {1} 位玩家。"),
             Map.entry("welcome", "欢迎来到 {0}"), Map.entry("web_hint", "可在 {0} 查看网页排行榜。"),
-            Map.entry("menu.scores", "查询分数"), Map.entry("menu.close_board", "关闭榜单"),
+            Map.entry("menu.scores", "总览"), Map.entry("menu.close_board", "关闭榜单"),
             Map.entry("menu.open_board", "开启榜单"), Map.entry("menu.close_look", "关闭抬头蹲起"),
             Map.entry("menu.open_look", "开启抬头蹲起"), Map.entry("menu.carousel", "轮播"),
-            Map.entry("menu.website", "打开网站"), Map.entry("menu.help", "帮助"),
-            Map.entry("help.player", "玩家指令"), Map.entry("help.scoreboard", "计分板"),
+            Map.entry("menu.website", "打开网站"), Map.entry("menu.help", "帮助"), Map.entry("menu.intro", "介绍榜单"),
+            Map.entry("help.player", "玩家指令"), Map.entry("help.scoreboard", "排行榜"),
             Map.entry("help.web", "网页与配置"), Map.entry("help.admin", "OP 管理"),
-            Map.entry("help.admin_players", "玩家与筛选"), Map.entry("help.admin_scoreboard", "计分板与颜色"),
+            Map.entry("help.admin_players", "玩家与筛选"), Map.entry("help.admin_scoreboard", "排行榜与颜色"),
             Map.entry("help.admin_web", "网页与缓存"), Map.entry("help.admin_config", "配置管理"),
-            Map.entry("help.config_general", "通用与进服"), Map.entry("help.config_scoreboard", "计分板与缓存"),
+            Map.entry("help.config_general", "通用与进服"), Map.entry("help.config_scoreboard", "排行榜与缓存"),
             Map.entry("help.config_web", "网页与限流"),
             Map.entry("help.back", "返回 Help"), Map.entry("help.back_config", "返回配置模块"),
-            Map.entry("help.tooltip.player", "玩家常用指令"), Map.entry("help.tooltip.scoreboard", "个人计分板指令"),
+            Map.entry("help.tooltip.player", "玩家常用指令"), Map.entry("help.tooltip.scoreboard", "排行榜显示与设置"),
+            Map.entry("help.scoreboard_metrics", "各榜单开启与设置"),
+            Map.entry("metric.toggle.heading", "添加或者减少榜单"),
+            Map.entry("metric.toggle.enabled_heading", "已开启榜单"), Map.entry("metric.toggle.disabled_heading", "已禁用榜单"),
+            Map.entry("metric.toggle.disable_tooltip", "点击减号禁用此榜单"),
+            Map.entry("metric.toggle.enable_tooltip", "点击加号开启此榜单"),
+            Map.entry("metric.toggle.enable_config_tooltip", "点击加号开启破基岩榜配置"),
             Map.entry("help.tooltip.web", "网页地址和配置说明"), Map.entry("help.tooltip.admin", "仅 OP 可用的管理指令"),
             Map.entry("help.tooltip.back", "返回帮助分组"), Map.entry("help.tooltip.config", "返回配置说明分组"),
             Map.entry("help.tooltip.admin_players", "白名单与玩家筛选"), Map.entry("help.tooltip.admin_scoreboard", "计分板、榜单显示与名字颜色"),
@@ -51,7 +57,7 @@ final class RankBoardLanguage {
             Map.entry("menu.tooltip.scores", "查看自己的全部统计分数"), Map.entry("menu.tooltip.close_board", "关闭自己的客户端计分板"),
             Map.entry("menu.tooltip.open_board", "恢复关闭前的客户端计分板"), Map.entry("menu.tooltip.close_look", "关闭自己的抬头+蹲起打开菜单"),
             Map.entry("menu.tooltip.open_look", "开启自己的抬头+蹲起打开菜单"), Map.entry("menu.tooltip.carousel", "自动轮播当前周期的榜单"),
-            Map.entry("menu.tooltip.help", "查看 RankBoard 帮助"), Map.entry("menu.tooltip.metric", "点击显示总计 {0} 侧边栏"),
+            Map.entry("menu.tooltip.help", "查看 RankBoard 帮助"), Map.entry("menu.tooltip.intro", "查看所有榜单用途和统计单位"), Map.entry("menu.tooltip.metric", "点击显示总计 {0} 侧边栏"),
             Map.entry("menu.all_disabled", "所有榜单显示均已被 OP 禁用。"),
             Map.entry("whitelist.heading", "筛选方式快速设置："), Map.entry("whitelist.first_heading", "首次排行榜筛选方式："),
             Map.entry("whitelist.server", "白名单"), Map.entry("whitelist.mod", "模组白名单"), Map.entry("whitelist.none", "无白名单"),
@@ -63,7 +69,7 @@ final class RankBoardLanguage {
             Map.entry("whitelist.server_selected", "服务器白名单"), Map.entry("whitelist.mod_selected", "模组白名单"),
             Map.entry("whitelist.none_selected", "无白名单"),
             Map.entry("scoreboard.total", "总和"), Map.entry("scoreboard.partial", "部分"), Map.entry("scoreboard.my_overview", "我的总览"),
-            Map.entry("scoreboard.hours", "（h）"),
+            Map.entry("scoreboard.hours", "（h）"), Map.entry("scoreboard.km", "（km）"),
             Map.entry("scoreboard.displayed", "已显示个人原版计分板；输入 /leaderboard display off 可关闭。"),
             Map.entry("error.player_only", "该命令只能由玩家执行。"),
             Map.entry("scoreboard.display_failed", "个人计分板显示失败：{0}"),
@@ -96,8 +102,19 @@ final class RankBoardLanguage {
             Map.entry("period.all", "总计"), Map.entry("period.day", "最近一日"), Map.entry("period.week", "最近一周"), Map.entry("period.month", "最近一月"), Map.entry("period.year", "最近一年"),
             Map.entry("metric.food", "大胃王榜"), Map.entry("metric.jumps", "跳跃榜"), Map.entry("metric.mined", "挖掘榜"), Map.entry("metric.placed", "放置榜"),
             Map.entry("metric.kills", "击杀榜"), Map.entry("metric.pvp", "PvP榜"), Map.entry("metric.deaths", "死亡榜"), Map.entry("metric.trades", "交易榜"),
-            Map.entry("metric.playtime", "在线榜"), Map.entry("metric.elytra", "飞行榜"), Map.entry("metric.fishing", "钓鱼榜"), Map.entry("metric.damage", "受伤榜"),
-            Map.entry("metric.dealt", "输出榜"), Map.entry("metric.dropped", "丢垃圾榜"), Map.entry("metric.picked", "拾荒榜"), Map.entry("metric.crafted", "合成榜"), Map.entry("metric.redstone", "红石大蛇榜"));
+            Map.entry("metric.playtime", "在线榜"), Map.entry("metric.afk", "摸鱼榜"), Map.entry("metric.elytra", "飞行榜"), Map.entry("metric.fishing", "钓鱼榜"), Map.entry("metric.damage", "受伤榜"),
+            Map.entry("metric.dealt", "输出榜"), Map.entry("metric.dropped", "丢垃圾榜"), Map.entry("metric.picked", "拾荒榜"), Map.entry("metric.crafted", "合成榜"), Map.entry("metric.redstone", "红石大蛇榜"),
+            Map.entry("metric.breeding", "繁殖榜"), Map.entry("metric.bedrock", "破基岩榜"),
+            Map.entry("metric.description.food", "累计食用食物数量"), Map.entry("metric.description.jumps", "累计跳跃次数"),
+            Map.entry("metric.description.mined", "累计挖掘已注册方块数量"), Map.entry("metric.description.placed", "累计放置方块数量"),
+            Map.entry("metric.description.breeding", "累计繁殖动物数量"), Map.entry("metric.description.bedrock", "周围 5 格内消失的基岩数量（默认关闭）"),
+            Map.entry("metric.description.kills", "累计击杀生物和玩家数量"), Map.entry("metric.description.pvp", "累计击杀玩家数量"),
+            Map.entry("metric.description.deaths", "累计死亡次数"), Map.entry("metric.description.trades", "累计与村民交易次数"),
+            Map.entry("metric.description.playtime", "累计在线时间，单位 h"), Map.entry("metric.description.afk", "停止移动超过 3 分钟后的摸鱼时间，单位 h"),
+            Map.entry("metric.description.elytra", "鞘翅飞行距离，单位 km"), Map.entry("metric.description.fishing", "累计钓鱼次数"),
+            Map.entry("metric.description.damage", "累计受到伤害值"), Map.entry("metric.description.dealt", "累计造成伤害值"),
+            Map.entry("metric.description.dropped", "累计丢弃物品数量"), Map.entry("metric.description.picked", "累计捡起物品数量"),
+            Map.entry("metric.description.crafted", "累计合成物品数量"), Map.entry("metric.description.redstone", "累计放置红石元件数量"));
     private static final Map<String, String> EN_US = Map.ofEntries(
             Map.entry("language.name", "English"), Map.entry("language.prompt", "Select language"),
             Map.entry("language.help", "Language"), Map.entry("language.selected", "Language set to {0}."),
@@ -106,18 +123,24 @@ final class RankBoardLanguage {
             Map.entry("language.default_tooltip", "Apply this language to all players and save it to the config"),
             Map.entry("language.default_set", "Set {0} as the server-wide default chat language for {1} players."),
             Map.entry("welcome", "Welcome to {0}"), Map.entry("web_hint", "View web rankings at {0}."),
-            Map.entry("menu.scores", "My scores"), Map.entry("menu.close_board", "Close board"),
+            Map.entry("menu.scores", "Overview"), Map.entry("menu.close_board", "Close board"),
             Map.entry("menu.open_board", "Open board"), Map.entry("menu.close_look", "Disable look menu"),
             Map.entry("menu.open_look", "Enable look menu"), Map.entry("menu.carousel", "Carousel"),
-            Map.entry("menu.website", "Open website"), Map.entry("menu.help", "Help"),
-            Map.entry("help.player", "Player"), Map.entry("help.scoreboard", "Scoreboard"),
+            Map.entry("menu.website", "Open website"), Map.entry("menu.help", "Help"), Map.entry("menu.intro", "Metric guide"),
+            Map.entry("help.player", "Player"), Map.entry("help.scoreboard", "Leaderboards"),
             Map.entry("help.web", "Web & config"), Map.entry("help.admin", "OP admin"),
-            Map.entry("help.admin_players", "Players & filters"), Map.entry("help.admin_scoreboard", "Scoreboard & colors"),
+            Map.entry("help.admin_players", "Players & filters"), Map.entry("help.admin_scoreboard", "Leaderboards & colors"),
             Map.entry("help.admin_web", "Web & cache"), Map.entry("help.admin_config", "Configuration"),
-            Map.entry("help.config_general", "General & join"), Map.entry("help.config_scoreboard", "Scoreboard & cache"),
+            Map.entry("help.config_general", "General & join"), Map.entry("help.config_scoreboard", "Leaderboards & cache"),
             Map.entry("help.config_web", "Web & rate limits"),
             Map.entry("help.back", "Back to Help"), Map.entry("help.back_config", "Back to config modules"),
-            Map.entry("help.tooltip.player", "Common player commands"), Map.entry("help.tooltip.scoreboard", "Personal scoreboard commands"),
+            Map.entry("help.tooltip.player", "Common player commands"), Map.entry("help.tooltip.scoreboard", "Leaderboard display and settings"),
+            Map.entry("help.scoreboard_metrics", "Per-leaderboard enable and settings"),
+            Map.entry("metric.toggle.heading", "Add or remove leaderboards"),
+            Map.entry("metric.toggle.enabled_heading", "Enabled leaderboards"), Map.entry("metric.toggle.disabled_heading", "Disabled leaderboards"),
+            Map.entry("metric.toggle.disable_tooltip", "Click the minus sign to disable this leaderboard"),
+            Map.entry("metric.toggle.enable_tooltip", "Click the plus sign to enable this leaderboard"),
+            Map.entry("metric.toggle.enable_config_tooltip", "Click the plus sign to enable the bedrock leaderboard configuration"),
             Map.entry("help.tooltip.web", "Website and configuration help"), Map.entry("help.tooltip.admin", "Operator-only management commands"),
             Map.entry("help.tooltip.back", "Return to Help groups"), Map.entry("help.tooltip.config", "Return to configuration groups"),
             Map.entry("help.tooltip.admin_players", "Whitelist and player filters"), Map.entry("help.tooltip.admin_scoreboard", "Scoreboard, visibility, and name colors"),
@@ -133,7 +156,7 @@ final class RankBoardLanguage {
             Map.entry("menu.tooltip.scores", "Show all of your statistics"), Map.entry("menu.tooltip.close_board", "Close your client scoreboard"),
             Map.entry("menu.tooltip.open_board", "Restore your previously closed client scoreboard"), Map.entry("menu.tooltip.close_look", "Disable your look-up+sneak menu"),
             Map.entry("menu.tooltip.open_look", "Enable your look-up+sneak menu"), Map.entry("menu.tooltip.carousel", "Rotate leaderboards for the current period"),
-            Map.entry("menu.tooltip.help", "View RankBoard Help"), Map.entry("menu.tooltip.metric", "Show the {0} all-time sidebar"),
+            Map.entry("menu.tooltip.help", "View RankBoard Help"), Map.entry("menu.tooltip.intro", "View metric purposes and units"), Map.entry("menu.tooltip.metric", "Show the {0} all-time sidebar"),
             Map.entry("menu.all_disabled", "All leaderboard displays are disabled by an operator."),
             Map.entry("whitelist.heading", "Quick filter setup:"), Map.entry("whitelist.first_heading", "First-time leaderboard filter:"),
             Map.entry("whitelist.server", "Server whitelist"), Map.entry("whitelist.mod", "Mod whitelist"), Map.entry("whitelist.none", "No whitelist"),
@@ -145,7 +168,7 @@ final class RankBoardLanguage {
             Map.entry("whitelist.server_selected", "Server whitelist"), Map.entry("whitelist.mod_selected", "Mod whitelist"),
             Map.entry("whitelist.none_selected", "No whitelist"),
             Map.entry("scoreboard.total", "Total"), Map.entry("scoreboard.partial", "Partial"), Map.entry("scoreboard.my_overview", "My overview"),
-            Map.entry("scoreboard.hours", " (h)"),
+            Map.entry("scoreboard.hours", " (h)"), Map.entry("scoreboard.km", " (km)"),
             Map.entry("scoreboard.displayed", "Personal vanilla scoreboard displayed; use /leaderboard display off to close it."),
             Map.entry("error.player_only", "This command can only be used by a player."),
             Map.entry("scoreboard.display_failed", "Failed to display personal scoreboard: {0}"),
@@ -178,11 +201,30 @@ final class RankBoardLanguage {
             Map.entry("period.all", "All time"), Map.entry("period.day", "Last day"), Map.entry("period.week", "Last week"), Map.entry("period.month", "Last month"), Map.entry("period.year", "Last year"),
             Map.entry("metric.food", "Food eater"), Map.entry("metric.jumps", "Jumps"), Map.entry("metric.mined", "Mining"), Map.entry("metric.placed", "Placing"),
             Map.entry("metric.kills", "Kills"), Map.entry("metric.pvp", "PvP"), Map.entry("metric.deaths", "Deaths"), Map.entry("metric.trades", "Trades"),
-            Map.entry("metric.playtime", "Playtime"), Map.entry("metric.elytra", "Flight"), Map.entry("metric.fishing", "Fishing"), Map.entry("metric.damage", "Damage taken"),
-            Map.entry("metric.dealt", "Damage dealt"), Map.entry("metric.dropped", "Dropped items"), Map.entry("metric.picked", "Picked items"), Map.entry("metric.crafted", "Crafted items"), Map.entry("metric.redstone", "Redstone builder"));
+            Map.entry("metric.playtime", "Playtime"), Map.entry("metric.afk", "AFK time"), Map.entry("metric.elytra", "Flight"), Map.entry("metric.fishing", "Fishing"), Map.entry("metric.damage", "Damage taken"),
+            Map.entry("metric.dealt", "Damage dealt"), Map.entry("metric.dropped", "Dropped items"), Map.entry("metric.picked", "Picked items"), Map.entry("metric.crafted", "Crafted items"), Map.entry("metric.redstone", "Redstone builder"),
+            Map.entry("metric.breeding", "Breeding"), Map.entry("metric.bedrock", "Bedrock breaking"),
+            Map.entry("metric.description.food", "Total food items eaten"), Map.entry("metric.description.jumps", "Total jumps"),
+            Map.entry("metric.description.mined", "Total registered blocks mined"), Map.entry("metric.description.placed", "Total blocks placed"),
+            Map.entry("metric.description.breeding", "Total animals bred"), Map.entry("metric.description.bedrock", "Bedrock blocks disappearing within 5 blocks (disabled by default)"),
+            Map.entry("metric.description.kills", "Total mobs and players killed"), Map.entry("metric.description.pvp", "Total players killed"),
+            Map.entry("metric.description.deaths", "Total deaths"), Map.entry("metric.description.trades", "Total villager trades"),
+            Map.entry("metric.description.playtime", "Total play time in hours"), Map.entry("metric.description.afk", "AFK time after 3 minutes without movement, in hours"),
+            Map.entry("metric.description.elytra", "Elytra distance in km"), Map.entry("metric.description.fishing", "Total fish caught"),
+            Map.entry("metric.description.damage", "Total damage taken"), Map.entry("metric.description.dealt", "Total damage dealt"),
+            Map.entry("metric.description.dropped", "Total items dropped"), Map.entry("metric.description.picked", "Total items picked up"),
+            Map.entry("metric.description.crafted", "Total items crafted"), Map.entry("metric.description.redstone", "Total redstone components placed"));
     /** Chinese Help descriptions and their built-in English translation. Keys written to JSON are stable hashes. */
     private static final Map<String, String> HELP_EN = Map.ofEntries(
             Map.entry("打开排行榜菜单", "Open the leaderboard menu"), Map.entry("查询所有个人统计并显示总览", "Show all of your statistics and the overview"),
+            Map.entry("添加或者减少榜单", "Add or remove leaderboards"),
+            Map.entry("按榜单直接设置显示状态", "Set a leaderboard display state directly"),
+            Map.entry("查看、开启或关闭此榜单", "View, enable, or disable this leaderboard"),
+            Map.entry("设置指定榜单颜色；支持 16 色预选或 RGB", "Set a leaderboard color; 16-color presets and RGB are supported"),
+            Map.entry("列出所有榜单的名称、标识和当前颜色", "List all leaderboard names, IDs, and current colors"),
+            Map.entry("恢复指定榜单或全部榜单默认颜色", "Reset one or all leaderboard colors to their defaults"),
+            Map.entry("设置指定榜单显示名称；同步游戏和网页", "Set a leaderboard display name; synchronizes game and web"),
+            Map.entry("介绍所有可用榜单", "Describe all available metrics"),
             Map.entry("查询指定周期的个人统计", "Show your statistics for the selected period"), Map.entry("查看排行榜", "View a leaderboard"),
             Map.entry("控制榜单轮播", "Control leaderboard carousel"), Map.entry("关闭或开启自己的抬头蹲起菜单", "Enable or disable your look-up-and-sneak menu"),
             Map.entry("关闭或开启自己的进服排行榜菜单", "Enable or disable your leaderboard menu on join"),
@@ -223,6 +265,7 @@ final class RankBoardLanguage {
             Map.entry("设置或查看历史扫描线程；0 自动，最多使用 50% 逻辑处理器；下次 cache reload 时生效", "Set or view history scan threads; 0 is automatic and uses up to 50% of CPUs; applies on the next cache reload"),
             Map.entry("开关玩家头像缓存；重新进服时生效", "Enable or disable player avatar caching; takes effect on the next join"),
             Map.entry("查看配置当前值、用途与生效方式", "View a configuration value, its purpose, and when it takes effect"),
+            Map.entry("开关破基岩榜；默认关闭，启用后记录周围 5 格内消失的基岩", "Enable or disable the bedrock-breaking metric; disabled by default and records bedrock disappearing within 5 blocks"),
             Map.entry("修改并保存配置；网页项会重启网页服务", "Change and save configuration; web options restart the web service"),
             Map.entry("列出所有配置当前值", "List all current configuration values"), Map.entry("查看单项当前值和用途", "View one configuration value and its purpose"));
     private static final Map<String, Map<String, String>> PACKS = new java.util.concurrent.ConcurrentHashMap<>();
@@ -235,6 +278,14 @@ final class RankBoardLanguage {
             Files.createDirectories(directory);
             writeDefault(directory.resolve("zh_cn.json"), defaults(ZH_CN, false));
             writeDefault(directory.resolve("en_us.json"), defaults(EN_US, true));
+            migrateDefaultValue(directory.resolve("zh_cn.json"), "menu.scores", "查询分数", "总览");
+            migrateDefaultValue(directory.resolve("en_us.json"), "menu.scores", "My scores", "Overview");
+            migrateDefaultValue(directory.resolve("zh_cn.json"), "help.scoreboard", "计分板", "排行榜");
+            migrateDefaultValue(directory.resolve("zh_cn.json"), "help.admin_scoreboard", "计分板与颜色", "排行榜与颜色");
+            migrateDefaultValue(directory.resolve("zh_cn.json"), "help.config_scoreboard", "计分板与缓存", "排行榜与缓存");
+            migrateDefaultValue(directory.resolve("en_us.json"), "help.scoreboard", "Scoreboard", "Leaderboards");
+            migrateDefaultValue(directory.resolve("en_us.json"), "help.admin_scoreboard", "Scoreboard & colors", "Leaderboards & colors");
+            migrateDefaultValue(directory.resolve("en_us.json"), "help.config_scoreboard", "Scoreboard & cache", "Leaderboards & cache");
             PACKS.clear();
             try (var files = Files.list(directory)) {
                 files.filter(path -> path.getFileName().toString().endsWith(".json")).forEach(path -> {
@@ -316,6 +367,21 @@ final class RankBoardLanguage {
         JsonObject target = root;
         entries.entrySet().stream().sorted(Map.Entry.comparingByKey())
                 .forEach(entry -> { if (!target.has(entry.getKey())) target.addProperty(entry.getKey(), entry.getValue()); });
+        Files.writeString(path, new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(root)
+                + System.lineSeparator(), StandardCharsets.UTF_8);
+    }
+
+    private static void migrateDefaultValue(Path path, String key, String oldValue, String newValue) throws IOException {
+        if (!Files.isRegularFile(path)) return;
+        JsonObject root;
+        try (var reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
+            root = JsonParser.parseReader(reader).getAsJsonObject();
+        } catch (RuntimeException exception) {
+            return;
+        }
+        JsonElement value = root.get(key);
+        if (value == null || !value.isJsonPrimitive() || !oldValue.equals(value.getAsString())) return;
+        root.addProperty(key, newValue);
         Files.writeString(path, new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(root)
                 + System.lineSeparator(), StandardCharsets.UTF_8);
     }

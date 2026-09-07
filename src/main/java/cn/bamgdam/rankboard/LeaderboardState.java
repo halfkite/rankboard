@@ -46,6 +46,8 @@ public final class LeaderboardState extends PersistentState {
     private final Set<UUID> lookMenuDisabledPlayers = new HashSet<>();
     private final Set<UUID> joinMenuDisabledPlayers = new HashSet<>();
     private final Map<UUID, String> playerLanguages = new HashMap<>();
+    /** Runtime metrics which are not present in vanilla statistics JSON files. */
+    private final Map<UUID, EnumMap<RankBoardMod.Metric, Long>> customMetricValues = new HashMap<>();
     private final Map<UUID, BoardPreference> boardPreferences = new HashMap<>();
     private BoardPreference globalBoardPreference;
     private final NavigableMap<LocalDate, Map<UUID, Map<RankBoardMod.Metric, Long>>> dailySnapshots = new TreeMap<>();
@@ -114,6 +116,20 @@ public final class LeaderboardState extends PersistentState {
                 }
             } catch (RuntimeException ignored) { }
         }
+        for (NbtElement element : NbtCompat.getList(nbt, "customMetricValues", NbtElement.COMPOUND_TYPE)) {
+            try {
+                NbtCompound entry = (NbtCompound) element;
+                UUID uuid = NbtCompat.getUuid(entry, "uuid");
+                NbtCompound values = NbtCompat.getCompound(entry, "values");
+                EnumMap<RankBoardMod.Metric, Long> custom = new EnumMap<>(RankBoardMod.Metric.class);
+                for (RankBoardMod.Metric metric : RankBoardMod.Metric.values()) {
+                    if (metric.isCustomMetric() && values.contains(metric.command)) {
+                        custom.put(metric, NbtCompat.getLong(values, metric.command));
+                    }
+                }
+                if (!custom.isEmpty()) state.customMetricValues.put(uuid, custom);
+            } catch (RuntimeException ignored) { }
+        }
         for (NbtElement element : NbtCompat.getList(nbt, "periods", NbtElement.COMPOUND_TYPE)) {
             PeriodData data = PeriodData.fromNbt((NbtCompound) element, legacyHistory);
             state.periods.put(data.period, data);
@@ -179,6 +195,18 @@ public final class LeaderboardState extends PersistentState {
             languages.add(entry);
         });
         nbt.put("playerLanguages", languages);
+        NbtList customMetrics = new NbtList();
+        customMetricValues.forEach((uuid, values) -> {
+            NbtCompound entry = new NbtCompound();
+            NbtCompat.putUuid(entry, "uuid", uuid);
+            NbtCompound valueCompound = new NbtCompound();
+            values.forEach((metric, value) -> {
+                if (metric.isCustomMetric()) valueCompound.putLong(metric.command, value);
+            });
+            entry.put("values", valueCompound);
+            customMetrics.add(entry);
+        });
+        nbt.put("customMetricValues", customMetrics);
         NbtList snapshots = new NbtList();
         dailySnapshots.forEach((date, players) -> {
             NbtCompound snapshot = new NbtCompound();
@@ -322,10 +350,39 @@ public final class LeaderboardState extends PersistentState {
             markDirty();
         }
     }
-    public boolean isMetricDisplayEnabled(RankBoardMod.Metric metric) { return !disabledDisplayMetrics.contains(metric); }
+    public boolean isMetricDisplayEnabled(RankBoardMod.Metric metric) {
+        if (metric == RankBoardMod.Metric.BEDROCK_BROKEN && !RankBoardConfig.get().bedrockBreakLeaderboardEnabled) return false;
+        return !disabledDisplayMetrics.contains(metric);
+    }
     public void setMetricDisplayEnabled(RankBoardMod.Metric metric, boolean enabled) {
         boolean changed = enabled ? disabledDisplayMetrics.remove(metric) : disabledDisplayMetrics.add(metric);
         if (changed) markDirty();
+    }
+
+    public long customMetric(UUID uuid, RankBoardMod.Metric metric) {
+        return customMetricValues.getOrDefault(uuid, new EnumMap<>(RankBoardMod.Metric.class))
+                .getOrDefault(metric, 0L);
+    }
+
+    public void addCustomMetric(UUID uuid, RankBoardMod.Metric metric, long amount) {
+        if (!metric.isCustomMetric() || amount <= 0) return;
+        EnumMap<RankBoardMod.Metric, Long> values = customMetricValues.computeIfAbsent(
+                uuid, ignored -> new EnumMap<>(RankBoardMod.Metric.class));
+        long previous = values.getOrDefault(metric, 0L);
+        long updated;
+        try { updated = Math.addExact(previous, amount); }
+        catch (ArithmeticException ignored) { updated = Long.MAX_VALUE; }
+        if (updated != previous) {
+            values.put(metric, updated);
+            markDirty();
+        }
+    }
+
+    public StatSnapshot applyCustomMetrics(StatSnapshot snapshot) {
+        EnumMap<RankBoardMod.Metric, Long> values = new EnumMap<>(snapshot.values());
+        EnumMap<RankBoardMod.Metric, Long> custom = customMetricValues.get(snapshot.uuid());
+        if (custom != null) custom.forEach((metric, value) -> values.put(metric, value));
+        return new StatSnapshot(snapshot.uuid(), snapshot.name(), values);
     }
     public boolean isNameColorEnabled(UUID uuid) { return !nameColorDisabledPlayers.contains(uuid); }
     public void setNameColorEnabled(UUID uuid, boolean enabled) {

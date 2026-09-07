@@ -72,6 +72,7 @@ public final class RankBoardMod implements ModInitializer {
         LOGGER.info("RankBoard initialized for Minecraft 1.21.x");
         CommandRegistrationCallback.EVENT.register(this::registerCommands);
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            RuntimeMetricTracker.start(server);
             RankBoardConfig.load(server);
             RankBoardLanguage.load(server);
             RankBoardWhitelist.load(server);
@@ -80,6 +81,7 @@ public final class RankBoardMod implements ModInitializer {
             WebDashboard.start(server);
         });
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+            RuntimeMetricTracker.stop(server);
             PlayerNameColors.clear(server);
             BoardService.clearSessions();
             WebDashboard.stop();
@@ -92,16 +94,19 @@ public final class RankBoardMod implements ModInitializer {
             // profile name, including a name changed since the last login.
             StatReader.updateName(player.getUuid(), ProfileCompat.name(player.getGameProfile()));
             LeaderboardState.get(server).ensurePlayer(player);
+            RuntimeMetricTracker.join(server, player);
             AvatarCache.cacheOnJoin(server, player);
             BoardService.restore(player);
             sendJoinExperience(player);
         });
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+            RuntimeMetricTracker.disconnect(server, handler.getPlayer());
             StatReader.capturePlayer(server, handler.getPlayer());
             LOOK_MENU_HELD.remove(handler.getPlayer().getUuid());
             BoardService.disconnect(handler.getPlayer());
         });
         ServerTickEvents.END_SERVER_TICK.register(server -> {
+            RuntimeMetricTracker.tick(server);
             BoardService.tickCarousel(server);
             BoardService.tickActivity(server);
             handleLookUpSneakMenu(server);
@@ -134,6 +139,8 @@ public final class RankBoardMod implements ModInitializer {
                         .then(CommandManager.literal("scoreboard").executes(context -> helpGrouped(context.getSource(), "admin-scoreboard")))
                         .then(CommandManager.literal("web").executes(context -> helpGrouped(context.getSource(), "admin-web")))
                         .then(CommandManager.literal("config").executes(context -> helpGrouped(context.getSource(), "admin-config")))));
+        root.then(CommandManager.literal("intro")
+                .executes(context -> metricIntroduction(context.getSource())));
         root.then(CommandManager.literal("mine")
                 .executes(context -> showMyScores(context.getSource(), -1, "总计"))
                 .then(CommandManager.literal("all").executes(context -> showMyScores(context.getSource(), -1, "总计")))
@@ -214,6 +221,13 @@ public final class RankBoardMod implements ModInitializer {
                 .then(CommandManager.literal("on").executes(context -> setNameColor(context.getSource(), "true")))
                 .then(CommandManager.literal("off").executes(context -> setNameColor(context.getSource(), "false")))
                 .then(CommandManager.literal("status").executes(context -> nameColorStatus(context.getSource()))));
+        root.then(CommandManager.literal("bedrock").requires(source -> CommandPermissionCompat.has(source, 2))
+                .then(CommandManager.literal("true").executes(context -> setConfig(context.getSource(),
+                        "bedrock-break-leaderboard-enabled", "true")))
+                .then(CommandManager.literal("false").executes(context -> setConfig(context.getSource(),
+                        "bedrock-break-leaderboard-enabled", "false")))
+                .then(CommandManager.literal("status").executes(context -> getConfig(context.getSource(),
+                        "bedrock-break-leaderboard-enabled"))));
         root.then(buildColorCommands());
         root.then(buildLabelCommands());
         root.then(CommandManager.literal("lookmenu")
@@ -229,7 +243,8 @@ public final class RankBoardMod implements ModInitializer {
                 .then(CommandManager.literal("false").executes(context -> setJoinMenu(context.getSource(), false)))
                 .then(CommandManager.literal("status").executes(context -> joinMenuStatus(context.getSource()))));
         LiteralArgumentBuilder<ServerCommandSource> displayFilter = CommandManager.literal("displayfilter")
-                .requires(source -> CommandPermissionCompat.has(source, 2));
+                .requires(source -> CommandPermissionCompat.has(source, 2))
+                .executes(context -> metricToggleMenu(context.getSource()));
         for (Metric metric : Metric.values()) {
             displayFilter.then(CommandManager.literal(metric.command)
                     .then(CommandManager.literal("true").executes(context -> setMetricDisplay(context.getSource(), metric, true)))
@@ -428,6 +443,7 @@ public final class RankBoardMod implements ModInitializer {
                         "OP 设置全服默认聊天语言；会更新在线和已记录玩家");
                 helpCommand(source, "/leaderboard", "/leaderboard", "打开排行榜菜单");
                 helpCommand(source, "/leaderboard mine", "/leaderboard mine", "查询所有个人统计并显示总览");
+                helpCommand(source, "/leaderboard intro", "/leaderboard intro", "介绍所有可用榜单");
                 helpCommand(source, "/leaderboard mine <all|day|week|month>", "/leaderboard mine ", "查询指定周期的个人统计");
                 helpCommand(source, "/leaderboard <周期> <榜单> [数量]", "/leaderboard all playtime ", "查看排行榜");
                 helpCommand(source, "/leaderboard carousel true|false|status", "/leaderboard carousel ", "控制榜单轮播");
@@ -440,6 +456,22 @@ public final class RankBoardMod implements ModInitializer {
                 helpCommand(source, "/leaderboard display off", "/leaderboard display off", "关闭个人计分板");
                 helpCommand(source, "/leaderboard mine", "/leaderboard mine", "显示个人所有榜单总览");
                 if (op) {
+                    source.sendFeedback(() -> Text.literal("=== " + localized(source, "help.scoreboard_metrics") + " ===")
+                            .formatted(Formatting.GRAY), false);
+                    helpCommand(source, "/leaderboard displayfilter", "/leaderboard displayfilter",
+                            "添加或者减少榜单");
+                    helpCommand(source, "/leaderboard displayfilter <榜单> <true|false|status>",
+                            "/leaderboard displayfilter ", "按榜单直接设置显示状态");
+                    helpCommand(source, "/leaderboard color <榜单> [颜色名|#RRGGBB]", "/leaderboard color ",
+                            "设置指定榜单颜色；支持 16 色预选或 RGB");
+                    helpCommand(source, "/leaderboard color list", "/leaderboard color list",
+                            "列出所有榜单的名称、标识和当前颜色");
+                    helpCommand(source, "/leaderboard color reset <榜单|all>", "/leaderboard color reset ",
+                            "恢复指定榜单或全部榜单默认颜色");
+                    helpCommand(source, "/leaderboard label <榜单> <名称>", "/leaderboard label ",
+                            "设置指定榜单显示名称；同步游戏和网页");
+                    helpCommand(source, "/leaderboard label list|reset <榜单|all>", "/leaderboard label ",
+                            "查看或恢复榜单显示名称");
                     helpCommand(source, "/leaderboard scoreboard cleanup", "/leaderboard scoreboard cleanup", "清理其他模组计分板");
                     helpCommand(source, "/leaderboard scoreboard blocking <true|false|status>",
                             "/leaderboard scoreboard blocking ", "设置其他模组计分板自动屏蔽");
@@ -494,7 +526,6 @@ public final class RankBoardMod implements ModInitializer {
             }
             case "admin-scoreboard" -> {
                 if (!op) return 0;
-                helpCommand(source, "/leaderboard displayfilter <榜单> <true|false|status>", "/leaderboard displayfilter ", "管理榜单显示");
                 helpCommand(source, "/leaderboard scoreboard show <周期> <榜单>", "/leaderboard scoreboard show ", "显示全服共享原版侧边栏；不会改变玩家名字颜色");
                 helpCommand(source, "/leaderboard scoreboard clear", "/leaderboard scoreboard clear", "关闭 RankBoard 全服共享侧边栏");
                 helpCommand(source, "/leaderboard scoreboard cleanup", "/leaderboard scoreboard cleanup", "检测并关闭当前其他模组计分板显示槽");
@@ -502,11 +533,6 @@ public final class RankBoardMod implements ModInitializer {
                         "/leaderboard scoreboard blocking ", "屏蔽其他模组计分板");
                 helpCommand(source, "/leaderboard namecolor <true|false|scoreboard-only|status>", "/leaderboard namecolor ",
                         "设置全服名字颜色：全部位置、全部关闭或仅排行榜；立即生效");
-                helpCommand(source, "/leaderboard color list", "/leaderboard color list", "列出全部榜单的中文名称、英文标识和当前颜色");
-                helpCommand(source, "/leaderboard color <榜单> [颜色名|#RRGGBB]", "/leaderboard color ", "不填颜色时打开英中双语 16 色预选；颜色名支持 Tab 补全；立即生效");
-                helpCommand(source, "/leaderboard color reset <榜单|all>", "/leaderboard color reset ", "恢复单个或全部榜单默认颜色");
-                helpCommand(source, "/leaderboard label <榜单> <名称>", "/leaderboard label ", "自定义榜单显示名称；支持中文、英文和空格；立即生效");
-                helpCommand(source, "/leaderboard label list|reset <榜单|all>", "/leaderboard label ", "查看或恢复榜单显示名称");
                 helpCommand(source, "/leaderboard lookmenu global <true|false|status>", "/leaderboard lookmenu global ", "OP 控制全服抬头蹲起菜单");
             }
             case "admin-web" -> {
@@ -534,6 +560,8 @@ public final class RankBoardMod implements ModInitializer {
             }
             case "admin-config" -> {
                 if (!op) return 0;
+                helpCommand(source, "/leaderboard bedrock <true|false|status>", "/leaderboard bedrock ",
+                        "开关破基岩榜；默认关闭，启用后记录周围 5 格内消失的基岩");
                 helpCommand(source, "/leaderboard config list", "/leaderboard config list", "列出全部配置、当前值和所属文件");
                 helpCommand(source, "/leaderboard config get <配置项>", "/leaderboard config get ", "查看配置当前值、用途与生效方式");
                 helpCommand(source, "/leaderboard config set <配置项> <值>", "/leaderboard config set ", "修改并保存配置；网页项会重启网页服务");
@@ -700,6 +728,9 @@ public final class RankBoardMod implements ModInitializer {
             secondRow = secondRow.copy().append(clickable(
                     "[" + localized(source, "menu.help") + "]", Formatting.GREEN, "/leaderboard help", localized(source, "menu.tooltip.help")));
             hasSecondRowButton = true;
+            secondRow = secondRow.copy().append(Text.literal(" ")).append(clickable(
+                    "[" + localized(source, "menu.intro") + "]", Formatting.LIGHT_PURPLE,
+                    "/leaderboard intro", localized(source, "menu.tooltip.intro")));
         }
         if (hasSecondRowButton) {
             Text finalSecondRow = secondRow;
@@ -707,11 +738,11 @@ public final class RankBoardMod implements ModInitializer {
         }
 
         int visible = 0;
-        visible += sendMetricMenuRow(source, Metric.ELYTRA_DISTANCE, Metric.JUMPS, Metric.MINED, Metric.PLACED);
-        visible += sendMetricMenuRow(source, Metric.FISHING, Metric.CRAFTED, Metric.TRADES, Metric.PLAY_TIME);
-        visible += sendMetricMenuRow(source, Metric.KILLS, Metric.DEATHS, Metric.DAMAGE_TAKEN, Metric.DAMAGE_DEALT);
-        visible += sendMetricMenuRow(source, Metric.PICKED_UP, Metric.DROPPED, Metric.PVP_KILLS);
-        visible += sendMetricMenuRow(source, Metric.FOOD, Metric.REDSTONE_PLACED);
+        visible += sendMetricMenuRow(source, Metric.ELYTRA_DISTANCE, Metric.JUMPS, Metric.MINED, Metric.BEDROCK_BROKEN);
+        visible += sendMetricMenuRow(source, Metric.PLACED, Metric.BREEDING, Metric.FISHING, Metric.CRAFTED);
+        visible += sendMetricMenuRow(source, Metric.TRADES, Metric.PLAY_TIME, Metric.AFK_TIME, Metric.KILLS);
+        visible += sendMetricMenuRow(source, Metric.DEATHS, Metric.DAMAGE_TAKEN, Metric.DAMAGE_DEALT, Metric.PVP_KILLS);
+        visible += sendMetricMenuRow(source, Metric.PICKED_UP, Metric.DROPPED, Metric.FOOD, Metric.REDSTONE_PLACED);
         if (visible == 0) {
             String disabledMessage = localized(source, "menu.all_disabled");
             source.sendFeedback(() -> Text.literal(disabledMessage + "\n").formatted(Formatting.GRAY), false);
@@ -743,6 +774,21 @@ public final class RankBoardMod implements ModInitializer {
         return visible;
     }
 
+    private int metricIntroduction(ServerCommandSource source) {
+        source.sendFeedback(() -> Text.literal("=== " + localized(source, "menu.intro") + " ===")
+                .formatted(Formatting.GOLD), false);
+        for (Metric metric : Metric.values()) {
+            if (!LeaderboardState.get(source.getServer()).isMetricDisplayEnabled(metric)) continue;
+            String label = localizedMetric(source, metric);
+            String description = localized(source, "metric.description." + metric.command);
+            Text line = clickable("[" + label + "]", metric, "/leaderboard display show all " + metric.command,
+                    localized(source, "menu.tooltip.metric").replace("{0}", label))
+                    .copy().append(Text.literal(" " + description).formatted(Formatting.GRAY));
+            source.sendFeedback(() -> line, false);
+        }
+        return 1;
+    }
+
     private int showMyScores(ServerCommandSource source, int days, String label) {
         try {
             ServerPlayerEntity player = source.getPlayerOrThrow();
@@ -754,6 +800,7 @@ public final class RankBoardMod implements ModInitializer {
             source.sendFeedback(() -> Text.literal("=== " + localized(source, "menu.scores") + " · " + periodText + " ===").formatted(Formatting.GOLD), false);
             LocalDate today = LocalDate.now();
             for (Metric metric : Metric.values()) {
+                if (!state.isMetricDisplayEnabled(metric)) continue;
                 long value;
                 if (days < 0) value = metric.read(player);
                 else value = state.range(source.getServer(), today.minusDays(days - 1L), today, metric)
@@ -911,6 +958,10 @@ public final class RankBoardMod implements ModInitializer {
             }
             if (key.equals("scoreboard-name-color-enabled") || key.equals("player-name-color-render-mode")
                     || key.startsWith("metric-color-")) refreshColors(source.getServer());
+            if (key.equals("bedrock-break-leaderboard-enabled")) {
+                BoardService.refreshAll(source.getServer());
+                WebDashboard.invalidateRankings();
+            }
             if (key.equals("scoreboard-recipient-filter")) BoardService.refreshAll(source.getServer());
             if (key.startsWith("metric-label-")) refreshMetricLabels(source.getServer());
             boolean webRunning = !webOption || WebDashboard.restart(source.getServer());
@@ -1405,6 +1456,44 @@ public final class RankBoardMod implements ModInitializer {
         return 1;
     }
 
+    /** Displays enabled metrics first and disabled metrics second, with one-click +/- toggles. */
+    private int metricToggleMenu(ServerCommandSource source) {
+        LeaderboardState state = LeaderboardState.get(source.getServer());
+        source.sendFeedback(() -> Text.literal("=== " + localized(source, "metric.toggle.heading") + " ===")
+                .formatted(Formatting.GOLD), false);
+        sendMetricToggleSection(source, state, true);
+        sendMetricToggleSection(source, state, false);
+        return Metric.values().length;
+    }
+
+    private void sendMetricToggleSection(ServerCommandSource source, LeaderboardState state, boolean enabled) {
+        List<Metric> metrics = java.util.Arrays.stream(Metric.values())
+                .filter(metric -> state.isMetricDisplayEnabled(metric) == enabled)
+                .toList();
+        if (metrics.isEmpty()) return;
+        String heading = localized(source, enabled ? "metric.toggle.enabled_heading" : "metric.toggle.disabled_heading");
+        source.sendFeedback(() -> Text.literal(heading).formatted(Formatting.GRAY), false);
+        for (Metric metric : metrics) {
+            String label = localizedMetric(source, metric);
+            boolean configurationDisabled = metric == Metric.BEDROCK_BROKEN
+                    && !RankBoardConfig.get().bedrockBreakLeaderboardEnabled;
+            String toggleCommand = enabled
+                    ? "/leaderboard displayfilter " + metric.command + " false"
+                    : (configurationDisabled
+                    ? "/leaderboard bedrock true"
+                    : "/leaderboard displayfilter " + metric.command + " true");
+            String tooltipKey = enabled ? "metric.toggle.disable_tooltip" :
+                    (configurationDisabled ? "metric.toggle.enable_config_tooltip" : "metric.toggle.enable_tooltip");
+            Text row = clickable("[" + label + "]", metric,
+                    "/leaderboard display show all " + metric.command,
+                    localized(source, "menu.tooltip.metric").replace("{0}", label))
+                    .copy().append(Text.literal(" "))
+                    .append(clickable(enabled ? "[-]" : "[+]", enabled ? Formatting.RED : Formatting.GREEN,
+                            toggleCommand, localized(source, tooltipKey)));
+            source.sendFeedback(() -> row, false);
+        }
+    }
+
     private int metricDisplayStatus(ServerCommandSource source, Metric metric) {
         boolean enabled = LeaderboardState.get(source.getServer()).isMetricDisplayEnabled(metric);
         source.sendFeedback(() -> Text.literal(metric.label() + " 显示：" + (enabled ? "已开启" : "已禁用")), false);
@@ -1697,6 +1786,7 @@ public final class RankBoardMod implements ModInitializer {
 
     static List<Entry> entries(net.minecraft.server.MinecraftServer server, Period period, Metric metric) {
         LeaderboardState state = LeaderboardState.get(server);
+        if (!state.isMetricDisplayEnabled(metric)) return List.of();
         state.rollPeriods(server);
         return StatReader.readAll(server, metric).stream()
                 .filter(snapshot -> isIncluded(server, state, snapshot.uuid(), snapshot.name()))
@@ -1717,7 +1807,7 @@ public final class RankBoardMod implements ModInitializer {
     }
 
     static String format(Metric metric, long value) {
-        if (metric == Metric.PLAY_TIME) return (value / 72000) + "h " + ((value / 1200) % 60) + "m";
+        if (metric == Metric.PLAY_TIME || metric == Metric.AFK_TIME) return (value / 72000) + "h " + ((value / 1200) % 60) + "m";
         if (metric == Metric.ELYTRA_DISTANCE) return String.format(java.util.Locale.ROOT, "%.1f km", value / 100000.0);
         if (metric == Metric.DAMAGE_TAKEN || metric == Metric.DAMAGE_DEALT) {
             return String.format(java.util.Locale.ROOT, "%.1f", value / 10.0);
@@ -1742,11 +1832,14 @@ public final class RankBoardMod implements ModInitializer {
         JUMPS("jumps", "跳跃榜", Formatting.LIGHT_PURPLE, p -> custom(p, Stats.JUMP)),
         MINED("mined", "挖掘榜", Formatting.BLUE, RankBoardMod::mined),
         PLACED("placed", "放置榜", Formatting.DARK_AQUA, RankBoardMod::placed),
+        BREEDING("breeding", "繁殖榜", Formatting.DARK_AQUA, p -> custom(p, Stats.ANIMALS_BRED)),
+        BEDROCK_BROKEN("bedrock", "破基岩榜", Formatting.BLUE, RankBoardMod::bedrockBroken),
         KILLS("kills", "击杀榜", Formatting.RED, p -> custom(p, Stats.MOB_KILLS) + custom(p, Stats.PLAYER_KILLS)),
         PVP_KILLS("pvp", "PvP榜", Formatting.DARK_RED, p -> custom(p, Stats.PLAYER_KILLS)),
         DEATHS("deaths", "死亡榜", Formatting.DARK_RED, p -> custom(p, Stats.DEATHS)),
         TRADES("trades", "交易榜", Formatting.GREEN, p -> custom(p, Stats.TRADED_WITH_VILLAGER)),
         PLAY_TIME("playtime", "在线榜", Formatting.AQUA, p -> custom(p, Stats.PLAY_TIME)),
+        AFK_TIME("afk", "摸鱼榜", Formatting.AQUA, RankBoardMod::afkTime),
         ELYTRA_DISTANCE("elytra", "飞行榜", Formatting.LIGHT_PURPLE, p -> custom(p, Stats.AVIATE_ONE_CM)),
         FISHING("fishing", "钓鱼榜", Formatting.DARK_BLUE, p -> custom(p, Stats.FISH_CAUGHT)),
         DAMAGE_TAKEN("damage", "受伤榜", Formatting.RED, p -> custom(p, Stats.DAMAGE_TAKEN)),
@@ -1765,6 +1858,7 @@ public final class RankBoardMod implements ModInitializer {
         }
         long read(ServerPlayerEntity player) { return counter.read(player); }
         String label() { return RankBoardConfig.get().metricLabel(this); }
+        boolean isCustomMetric() { return this == AFK_TIME || this == BEDROCK_BROKEN; }
     }
 
     public enum Period {
@@ -1791,6 +1885,14 @@ public final class RankBoardMod implements ModInitializer {
     private static long pickedUp(ServerPlayerEntity player) { return Registries.ITEM.stream().mapToLong(item -> player.getStatHandler().getStat(Stats.PICKED_UP.getOrCreateStat(item))).sum(); }
     private static long crafted(ServerPlayerEntity player) { return Registries.ITEM.stream().mapToLong(item -> player.getStatHandler().getStat(Stats.CRAFTED.getOrCreateStat(item))).sum(); }
     private static long redstonePlaced(ServerPlayerEntity player) { return Registries.ITEM.stream().filter(RankBoardMod::isRedstoneComponent).mapToLong(item -> player.getStatHandler().getStat(Stats.USED.getOrCreateStat(item))).sum(); }
+    private static long afkTime(ServerPlayerEntity player) {
+        try { return LeaderboardState.get(PlayerCompat.server(player)).customMetric(player.getUuid(), Metric.AFK_TIME); }
+        catch (RuntimeException ignored) { return 0L; }
+    }
+    private static long bedrockBroken(ServerPlayerEntity player) {
+        try { return LeaderboardState.get(PlayerCompat.server(player)).customMetric(player.getUuid(), Metric.BEDROCK_BROKEN); }
+        catch (RuntimeException ignored) { return 0L; }
+    }
     static boolean isRedstoneComponent(Item item) {
         String path = Registries.ITEM.getId(item).getPath();
         return REDSTONE_COMPONENTS.contains(path)

@@ -593,8 +593,10 @@ final class BoardService {
         String name = objectiveName(period, metric, personal);
         Scoreboard scoreboard = server.getScoreboard();
         ScoreboardObjective objective = scoreboard.getNullableObjective(name);
-        String unit = metric == RankBoardMod.Metric.PLAY_TIME
-                ? (localePlayer == null ? "（h）" : RankBoardLanguage.text(localePlayer, "scoreboard.hours")) : "";
+        String unit = (metric == RankBoardMod.Metric.PLAY_TIME || metric == RankBoardMod.Metric.AFK_TIME)
+                ? (localePlayer == null ? "（h）" : RankBoardLanguage.text(localePlayer, "scoreboard.hours"))
+                : metric == RankBoardMod.Metric.ELYTRA_DISTANCE
+                ? (localePlayer == null ? "（km）" : RankBoardLanguage.text(localePlayer, "scoreboard.km")) : "";
         boolean partialPeriod = period != RankBoardMod.Period.ALL
                 && !LeaderboardState.get(server).isPeriodComplete(period, metric);
         String periodLabel = localePlayer == null ? period.label : RankBoardMod.localizedPeriod(localePlayer, period);
@@ -633,11 +635,18 @@ final class BoardService {
 
     private static int clamp(long value) { return (int) Math.max(Integer.MIN_VALUE, Math.min(Integer.MAX_VALUE, value)); }
     private static int scoreboardValue(RankBoardMod.Metric metric, long value) {
-        return clamp(metric == RankBoardMod.Metric.PLAY_TIME ? value / 72_000L : value);
+        return clamp(metric == RankBoardMod.Metric.PLAY_TIME || metric == RankBoardMod.Metric.AFK_TIME
+                ? value / 72_000L : value);
     }
     private static Optional<NumberFormat> scoreboardFormat(RankBoardMod.Metric metric, int value) {
-        if (metric != RankBoardMod.Metric.PLAY_TIME) return Optional.empty();
-        return Optional.of(new FixedNumberFormat(Text.literal(value + "h").formatted(Formatting.RED)));
+        if (metric == RankBoardMod.Metric.PLAY_TIME || metric == RankBoardMod.Metric.AFK_TIME) {
+            return Optional.of(new FixedNumberFormat(Text.literal(value + "h").formatted(Formatting.RED)));
+        }
+        if (metric == RankBoardMod.Metric.ELYTRA_DISTANCE) {
+            return Optional.of(new FixedNumberFormat(Text.literal(String.format(java.util.Locale.ROOT,
+                    "%.1f km", value / 100000.0)).formatted(Formatting.RED)));
+        }
+        return Optional.empty();
     }
     private static String describe(RuntimeException exception) {
         return exception.getClass().getSimpleName()

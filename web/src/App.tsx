@@ -76,7 +76,7 @@ const UI_TEXT: Record<Language, Record<string, string>> = {
     noPlayers: "当前筛选下没有可显示的玩家。", partial: "部分统计", incompleteRange: "统计范围缺少完整边界",
     historySync: "历史统计同步", onlyOnline: "仅在线玩家", rank: "排名", playerName: "玩家名称", uuid: "UUID", value: "数值",
     serverIcon: "服务器图标", websiteAria: "RankBoard 模组链接", allMetrics: "的全部榜单数值", noMetric: "无可用榜单",
-    playtimeDetail: "活跃度", foodDetail: "食物", jumpsDetail: "移动", minedDetail: "资源", placedDetail: "建造",
+    playtimeDetail: "活跃度", afkDetail: "摸鱼", breedingDetail: "繁殖", bedrockDetail: "基岩", foodDetail: "食物", jumpsDetail: "移动", minedDetail: "资源", placedDetail: "建造",
     killsDetail: "战斗", pvpDetail: "玩家对战", deathsDetail: "生存", tradesDetail: "经济", elytraDetail: "探索",
     fishingDetail: "休闲", damageDetail: "生存", dealtDetail: "战斗", droppedDetail: "物品", pickedDetail: "物品",
     craftedDetail: "制造", redstoneDetail: "红石", modTitle: "RankBoard排行榜模组"
@@ -91,7 +91,7 @@ const UI_TEXT: Record<Language, Record<string, string>> = {
     noPlayers: "No players are available for the current filters.", partial: "Partial statistics", incompleteRange: "The selected range has incomplete boundaries",
     historySync: "History synchronized", onlyOnline: "Online players only", rank: "Rank", playerName: "Player name", uuid: "UUID", value: "Value",
     serverIcon: "Server icon", websiteAria: "RankBoard mod links", allMetrics: "'s leaderboard values", noMetric: "No available leaderboard",
-    playtimeDetail: "Activity", foodDetail: "Food", jumpsDetail: "Movement", minedDetail: "Resources", placedDetail: "Building",
+    playtimeDetail: "Activity", afkDetail: "AFK", breedingDetail: "Breeding", bedrockDetail: "Bedrock", foodDetail: "Food", jumpsDetail: "Movement", minedDetail: "Resources", placedDetail: "Building",
     killsDetail: "Combat", pvpDetail: "Player combat", deathsDetail: "Survival", tradesDetail: "Economy", elytraDetail: "Exploration",
     fishingDetail: "Leisure", damageDetail: "Survival", dealtDetail: "Combat", droppedDetail: "Items", pickedDetail: "Items",
     craftedDetail: "Crafting", redstoneDetail: "Redstone", modTitle: "RankBoard Leaderboard Mod"
@@ -100,9 +100,9 @@ const UI_TEXT: Record<Language, Record<string, string>> = {
 
 const METRIC_TEXT: Record<string, { zh: string; en: string }> = {
   playtime: { zh: "在线时间", en: "Playtime" }, food: { zh: "大胃王", en: "Food eater" }, jumps: { zh: "跳跃榜", en: "Jumps" },
-  mined: { zh: "挖掘榜", en: "Mining" }, placed: { zh: "放置榜", en: "Placing" }, kills: { zh: "击杀榜", en: "Kills" },
+  mined: { zh: "挖掘榜", en: "Mining" }, placed: { zh: "放置榜", en: "Placing" }, breeding: { zh: "繁殖榜", en: "Breeding" }, bedrock: { zh: "破基岩榜", en: "Bedrock breaking" }, kills: { zh: "击杀榜", en: "Kills" },
   pvp: { zh: "PvP榜", en: "PvP" }, deaths: { zh: "死亡榜", en: "Deaths" }, trades: { zh: "交易榜", en: "Trades" },
-  elytra: { zh: "鞘翅飞行榜", en: "Flight" }, fishing: { zh: "钓鱼榜", en: "Fishing" }, damage: { zh: "受伤榜", en: "Damage taken" },
+  afk: { zh: "摸鱼榜", en: "AFK time" }, elytra: { zh: "鞘翅飞行榜", en: "Flight" }, fishing: { zh: "钓鱼榜", en: "Fishing" }, damage: { zh: "受伤榜", en: "Damage taken" },
   dealt: { zh: "输出榜", en: "Damage dealt" }, dropped: { zh: "丢垃圾榜", en: "Dropped items" }, picked: { zh: "拾荒榜", en: "Picked items" },
   crafted: { zh: "合成榜", en: "Crafted items" }, redstone: { zh: "红石大蛇榜", en: "Redstone builder" }
 };
@@ -231,10 +231,13 @@ const periods = [
 
 const defaultMetrics: Metric[] = [
   { id: "playtime", label: "在线榜", detail: "活跃度" },
+  { id: "afk", label: "摸鱼榜", detail: "摸鱼" },
   { id: "food", label: "大胃王榜", detail: "食物" },
   { id: "jumps", label: "跳跃榜", detail: "移动" },
   { id: "mined", label: "挖掘榜", detail: "资源" },
+  { id: "bedrock", label: "破基岩榜", detail: "基岩" },
   { id: "placed", label: "放置榜", detail: "建造" },
+  { id: "breeding", label: "繁殖榜", detail: "繁殖" },
   { id: "kills", label: "击杀榜", detail: "战斗" },
   { id: "pvp", label: "PvP榜", detail: "玩家对战" },
   { id: "deaths", label: "死亡榜", detail: "生存" },

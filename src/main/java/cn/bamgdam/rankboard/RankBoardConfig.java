@@ -42,6 +42,7 @@ final class RankBoardConfig {
             option("carousel-enabled", "true", FileKind.MAIN, "客户端计分板", "是否允许玩家使用榜单轮播；默认 true。"),
             option("carousel-interval-seconds", "30", FileKind.MAIN, "客户端计分板", "榜单轮播间隔秒数；默认 30，范围 3-3600。"),
             option("carousel-color-follow-metric", "true", FileKind.MAIN, "客户端计分板", "轮播计分板标题是否跟随当前榜单颜色；false 时固定使用青色；默认 true。"),
+            option("bedrock-break-leaderboard-enabled", "false", FileKind.MAIN, "榜单功能", "是否启用破基岩榜；启用后记录玩家周围 5 格内消失的基岩；默认 false。"),
             option("client-scoreboard-show-zero", "false", FileKind.MAIN, "客户端计分板", "个人侧边栏是否显示当前榜单数值为 0 的玩家；默认 false。"),
             option("scoreboard-switch-message-enabled", "true", FileKind.MAIN, "客户端计分板", "切换个人榜单后是否发送“已显示……”提示；默认 true。"),
             option("scoreboard-name-color-enabled", "true", FileKind.MAIN, "客户端计分板", "玩家名字颜色模式；true 同步排行榜、聊天、TAB 和头顶名牌，false 全部关闭，scoreboard-only 仅排行榜；默认 true。"),
@@ -51,11 +52,13 @@ final class RankBoardConfig {
             option("metric-label-jumps", "跳跃榜", FileKind.MAIN, "榜单名称", "跳跃榜在游戏和网页结果中显示的名称。"),
             option("metric-label-mined", "挖掘榜", FileKind.MAIN, "榜单名称", "挖掘榜在游戏和网页结果中显示的名称。"),
             option("metric-label-placed", "放置榜", FileKind.MAIN, "榜单名称", "放置榜在游戏和网页结果中显示的名称。"),
+            option("metric-label-breeding", "繁殖榜", FileKind.MAIN, "榜单名称", "繁殖动物数量榜在游戏和网页结果中显示的名称。"),
             option("metric-label-kills", "击杀榜", FileKind.MAIN, "榜单名称", "击杀榜在游戏和网页结果中显示的名称。"),
             option("metric-label-pvp", "PvP榜", FileKind.MAIN, "榜单名称", "击杀其他玩家数量榜在游戏和网页结果中显示的名称。"),
             option("metric-label-deaths", "死亡榜", FileKind.MAIN, "榜单名称", "死亡榜在游戏和网页结果中显示的名称。"),
             option("metric-label-trades", "交易榜", FileKind.MAIN, "榜单名称", "交易榜在游戏和网页结果中显示的名称。"),
             option("metric-label-playtime", "在线榜", FileKind.MAIN, "榜单名称", "在线榜在游戏和网页结果中显示的名称。"),
+            option("metric-label-afk", "摸鱼榜", FileKind.MAIN, "榜单名称", "停止移动超过 3 分钟后累计的摸鱼时间榜。"),
             option("metric-label-elytra", "飞行榜", FileKind.MAIN, "榜单名称", "飞行榜在游戏和网页结果中显示的名称。"),
             option("metric-label-fishing", "钓鱼榜", FileKind.MAIN, "榜单名称", "钓鱼榜在游戏和网页结果中显示的名称。"),
             option("metric-label-damage", "受伤榜", FileKind.MAIN, "榜单名称", "受伤榜在游戏和网页结果中显示的名称。"),
@@ -68,11 +71,13 @@ final class RankBoardConfig {
             option("metric-color-jumps", "#FF55FF", FileKind.MAIN, "榜单颜色", "跳跃榜颜色；格式 #RRGGBB。"),
             option("metric-color-mined", "#5555FF", FileKind.MAIN, "榜单颜色", "挖掘榜颜色；默认蓝色，格式 #RRGGBB。"),
             option("metric-color-placed", "#00AAAA", FileKind.MAIN, "榜单颜色", "放置榜颜色；默认深青色，格式 #RRGGBB。"),
+            option("metric-color-breeding", "#00AAAA", FileKind.MAIN, "榜单颜色", "繁殖榜颜色；跟随放置榜，默认深青色，格式 #RRGGBB。"),
             option("metric-color-kills", "#FF5555", FileKind.MAIN, "榜单颜色", "击杀榜颜色；格式 #RRGGBB。"),
             option("metric-color-pvp", "#AA0000", FileKind.MAIN, "榜单颜色", "PvP榜颜色；默认深红色，格式 #RRGGBB。"),
             option("metric-color-deaths", "#AA0000", FileKind.MAIN, "榜单颜色", "死亡榜颜色；格式 #RRGGBB。"),
             option("metric-color-trades", "#55FF55", FileKind.MAIN, "榜单颜色", "交易榜颜色；默认绿色，格式 #RRGGBB。"),
             option("metric-color-playtime", "#55FFFF", FileKind.MAIN, "榜单颜色", "在线榜颜色；默认青色，格式 #RRGGBB。"),
+            option("metric-color-afk", "#55FFFF", FileKind.MAIN, "榜单颜色", "摸鱼榜颜色；跟随在线榜，默认青色，格式 #RRGGBB。"),
             option("metric-color-elytra", "#FF55FF", FileKind.MAIN, "榜单颜色", "鞘翅飞行榜颜色；格式 #RRGGBB。"),
             option("metric-color-fishing", "#0000AA", FileKind.MAIN, "榜单颜色", "钓鱼榜颜色；默认深蓝色，格式 #RRGGBB。"),
             option("metric-color-damage", "#FF5555", FileKind.MAIN, "榜单颜色", "受伤榜颜色；默认红色，格式 #RRGGBB。"),
@@ -81,6 +86,8 @@ final class RankBoardConfig {
             option("metric-color-picked", "#55FF55", FileKind.MAIN, "榜单颜色", "拾荒榜颜色；格式 #RRGGBB。"),
             option("metric-color-crafted", "#FFAA00", FileKind.MAIN, "榜单颜色", "合成榜颜色；格式 #RRGGBB。"),
             option("metric-color-redstone", "#FF5555", FileKind.MAIN, "榜单颜色", "红石大蛇榜颜色；格式 #RRGGBB。"),
+            option("metric-label-bedrock", "破基岩榜", FileKind.MAIN, "榜单名称", "周围 5 格内消失的基岩数量榜在游戏和网页结果中显示的名称。"),
+            option("metric-color-bedrock", "#5555FF", FileKind.MAIN, "榜单颜色", "破基岩榜颜色；跟随挖掘榜，默认蓝色，格式 #RRGGBB。"),
             option("scoreboard-title-color-enabled", "true", FileKind.MAIN, "客户端计分板", "是否让计分板标题跟随当前榜单颜色；默认 true。"),
             option("scoreboard-live-update-enabled", "true", FileKind.MAIN, "客户端计分板", "玩家行为改变统计时是否即时刷新对应榜单；默认 true。"),
             option("scoreboard-live-update-window-seconds", "30", FileKind.MAIN, "客户端计分板", "高频行为统计窗口秒数；默认 30，范围 1-300。"),
@@ -124,6 +131,7 @@ final class RankBoardConfig {
     final boolean carouselEnabled;
     final int carouselIntervalSeconds;
     final boolean carouselColorFollowMetric;
+    final boolean bedrockBreakLeaderboardEnabled;
     final boolean clientScoreboardShowZero;
     final boolean scoreboardSwitchMessageEnabled;
     final NameColorMode nameColorMode;
@@ -155,6 +163,7 @@ final class RankBoardConfig {
         carouselEnabled = bool(properties, "carousel-enabled", true);
         carouselIntervalSeconds = integer(properties, "carousel-interval-seconds", 30, 3, 3600);
         carouselColorFollowMetric = bool(properties, "carousel-color-follow-metric", true);
+        bedrockBreakLeaderboardEnabled = bool(properties, "bedrock-break-leaderboard-enabled", false);
         clientScoreboardShowZero = bool(properties, "client-scoreboard-show-zero", false);
         scoreboardSwitchMessageEnabled = bool(properties, "scoreboard-switch-message-enabled", true);
         nameColorMode = NameColorMode.parse(properties.getProperty("scoreboard-name-color-enabled", "true"));
@@ -418,7 +427,7 @@ final class RankBoardConfig {
             case "scoreboard-live-update-throttle-seconds", "web-ranking-refresh-interval-seconds" -> normalizedInteger(value, 1, 3600);
             case "welcome-enabled", "join-menu-enabled", "join-web-hint-enabled", "website-button-enabled",
                     "restore-scoreboard-on-join", "look-up-sneak-menu-enabled", "carousel-enabled",
-                    "carousel-color-follow-metric",
+                    "carousel-color-follow-metric", "bedrock-break-leaderboard-enabled",
                     "client-scoreboard-show-zero", "scoreboard-switch-message-enabled",
                     "scoreboard-title-color-enabled",
                     "scoreboard-live-update-enabled", "avatar-cache-enabled", "mod-whitelist-enabled",

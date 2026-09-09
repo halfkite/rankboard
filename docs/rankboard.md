@@ -330,9 +330,11 @@ website-icon=server-icon.png              # 服务器图标路径
 web-default-language=zh_cn                 # 网页默认语言；可选 zh_cn、en_us 或 auto（auto 跟随浏览器）
 
 # --- 网页切换 ---
-web-switcher-name=auto                     # 切换按钮名称；auto 使用网页服务器名
+web-switcher-name=auto                     # 切换按钮名称；auto 使用服务器名（MOTD）+默认游戏模式
 web-switcher-weight=100                    # 显示权重；越小越靠前，1 最先显示
 web-switcher-peers=                        # 其他 RankBoard 网页地址，逗号分隔
+web-switcher-op-hint-enabled=true          # OP 进服时提醒设置唯一切换名称
+web-port-fallback-enabled=true             # 端口占用时自动选择下一个空闲端口并注册到本机切换列表
 
 # --- 请求限流 ---
 web-data-requests-per-second=1            # 单个 IP 的数据请求基础频率（范围 1-100）
@@ -402,10 +404,11 @@ GET /api/rankings?metric=playtime&from=2026-07-16&to=2026-07-20
 
 ## 多服务器网页切换
 
-多个 RankBoard 网页可通过 `/leaderboard webswitch add <IP|域名|网址>` 加入左侧切换列表。地址未写端口时使用当前网页端口；相同 IP 和端口会自动合并。
+多个 RankBoard 网页可通过 `/leaderboard webswitch add <IP|域名|网址>` 加入切换列表。地址未写端口时使用当前网页端口；相同 IP 和端口会自动合并。检测到多个在线网页后，网页左上角会显示服务器切换按钮；侧边栏仍保留同一列表。
 
-- `/leaderboard webswitch name <名称|auto>` 设置本服按钮名称
+- `/leaderboard webswitch name <名称|auto>` 设置本服按钮名称；`auto` 默认使用服务器名称（MOTD）和 `server.properties` 的默认游戏模式
 - `/leaderboard webswitch weight <1-10000>` 设置顺序，权重 `1` 最先显示
+- `web-switcher-op-hint-enabled=true` 时，OP 进服会收到设置唯一切换名称的提示；可用 `/leaderboard config set web-switcher-op-hint-enabled false` 关闭
 
 ## 存档数据
 
@@ -431,7 +434,7 @@ gradlew.bat build
 
 ## GitHub Actions 发布
 
-先在 GitHub 创建并发布 Release（标签建议使用 `1.9.1` 或 `v1.9.1`）。发布事件会触发两个相互独立的流程：
+先在 GitHub 创建并发布 Release（标签建议使用 `1.10.1` 或 `v1.10.1`）。发布事件会触发两个相互独立的流程：
 
 - `.github/workflows/release.yml` 只构建 Fabric。
 - `.github/workflows/release-neoforge.yml` 只构建 NeoForge。

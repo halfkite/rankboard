@@ -330,9 +330,11 @@ website-icon=server-icon.png              # Server icon path
 web-default-language=zh_cn                 # Default web language; supports zh_cn, en_us, or auto (follow browser)
 
 # --- Switcher ---
-web-switcher-name=auto                     # Switcher button name; auto uses the web server name
+web-switcher-name=auto                     # Switcher button name; auto uses server name (MOTD) + default game mode
 web-switcher-weight=100                    # Lower values sort first; weight 1 is first
 web-switcher-peers=                        # Other RankBoard addresses, comma-separated
+web-switcher-op-hint-enabled=true          # Remind operators on join to set a unique switcher name
+web-port-fallback-enabled=true             # Select the next free port when occupied and register it locally
 
 # --- Rate Limiting ---
 web-data-requests-per-second=1            # Per-IP base rate for data requests (range 1-100)
@@ -402,10 +404,11 @@ The web default remains controlled independently by `web-default-language`; a vi
 
 ## Multi-Server Web Switcher
 
-Add RankBoard sites to the left-side switcher with `/leaderboard webswitch add <IP|host|URL>`. Addresses without a port inherit the current web port, and entries resolving to the same IP and port are merged.
+Add RankBoard sites to the switcher with `/leaderboard webswitch add <IP|host|URL>`. Addresses without a port inherit the current web port, and entries resolving to the same IP and port are merged. When more than one site is online, the web page shows a server switch button in the top-left; the sidebar keeps the same list.
 
-- `/leaderboard webswitch name <name|auto>` sets this server's button name
+- `/leaderboard webswitch name <name|auto>` sets this server's button name; `auto` uses the server name (MOTD) plus the default game mode from `server.properties`
 - `/leaderboard webswitch weight <1-10000>` sets the sort order; weight `1` sorts first
+- With `web-switcher-op-hint-enabled=true`, operators receive a join reminder to set a unique switcher name; disable it with `/leaderboard config set web-switcher-op-hint-enabled false`
 
 ## World Data
 
@@ -431,7 +434,7 @@ Multi-version results are collected under `multi-version-builds/`; every success
 
 ## GitHub Actions publishing
 
-Create and publish a GitHub Release first (a tag such as `1.9.1` or `v1.9.1` is recommended). The published event starts two independent workflows:
+Create and publish a GitHub Release first (a tag such as `1.10.1` or `v1.10.1` is recommended). The published event starts two independent workflows:
 
 - `.github/workflows/release.yml` builds Fabric only.
 - `.github/workflows/release-neoforge.yml` builds NeoForge only.

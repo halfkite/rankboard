@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.InetAddress;
+import java.net.BindException;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.net.http.HttpClient;
@@ -39,6 +40,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -54,11 +56,17 @@ final class WebDashboard {
     private static int dataRequestsPerSecond = 1;
     private static int iconRequestIntervalSeconds = 3;
     private static int rankingRefreshIntervalSeconds = 30;
+    private static int configuredWebPort = 8765;
     private static int webPort = 8765;
+    /** Stable only for this running JVM; used to route same-port local dashboards. */
+    private static String instanceId = UUID.randomUUID().toString();
+    private static boolean internalRelayPort;
     private static String webDefaultLanguage = "zh_cn";
     private static String switcherName = "Minecraft Server";
     private static int switcherWeight = 100;
     private static List<String> switcherPeers = List.of();
+    private static Path registryFile;
+    private static ScheduledExecutorService registryScheduler;
     private static Properties webTheme = new Properties();
     private static final HttpClient PEER_CLIENT = HttpClient.newBuilder()
             .connectTimeout(Duration.ofMillis(800)).followRedirects(HttpClient.Redirect.NEVER).build();
@@ -85,7 +93,9 @@ final class WebDashboard {
             Properties config = RankBoardConfig.loadWeb(server);
             String host = config.getProperty("host", "0.0.0.0");
             int port = Integer.parseInt(config.getProperty("port", "8765"));
+            configuredWebPort = port;
             webPort = port;
+            internalRelayPort = false;
             dataRequestsPerSecond = Integer.parseInt(config.getProperty("web-data-requests-per-second", "1"));
             iconRequestIntervalSeconds = Integer.parseInt(config.getProperty("web-icon-request-interval-seconds", "3"));
             rankingRefreshIntervalSeconds = Integer.parseInt(config.getProperty("web-ranking-refresh-interval-seconds", "30"));
@@ -93,7 +103,7 @@ final class WebDashboard {
             webDefaultLanguage = config.getProperty("web-default-language", "zh_cn").strip().toLowerCase(java.util.Locale.ROOT);
             String configuredSwitcherName = config.getProperty("web-switcher-name", "auto").strip();
             switcherName = configuredSwitcherName.equalsIgnoreCase("auto") || configuredSwitcherName.isEmpty()
-                    ? serverName : configuredSwitcherName;
+                    ? resolveDefaultSwitcherName(server, serverName) : configuredSwitcherName;
             switcherWeight = Integer.parseInt(config.getProperty("web-switcher-weight", "100"));
             switcherPeers = parsePeers(config.getProperty("web-switcher-peers", ""));
             websiteIcon = resolveIcon(server, config.getProperty("website-icon", "server-icon.png"));
@@ -103,7 +113,35 @@ final class WebDashboard {
             for (String key : config.stringPropertyNames()) {
                 if (key.startsWith("web-theme-")) webTheme.setProperty(key, config.getProperty(key));
             }
-            http = HttpServer.create(new InetSocketAddress(host, port), 0);
+            boolean allowPortFallback = Boolean.parseBoolean(
+                    config.getProperty("web-port-fallback-enabled", "true"));
+            HttpServer created;
+            int selectedPort = port;
+            String bindHost = host;
+            try {
+                created = HttpServer.create(new InetSocketAddress(host, selectedPort), 0);
+            } catch (BindException occupied) {
+                if (!allowPortFallback) throw occupied;
+                created = null;
+                bindHost = "127.0.0.1";
+                internalRelayPort = true;
+                for (int candidate = port + 1; candidate <= Math.min(65535, port + 1000); candidate++) {
+                    try {
+                        created = HttpServer.create(new InetSocketAddress(bindHost, candidate), 0);
+                        selectedPort = candidate;
+                        break;
+                    } catch (BindException ignored) { }
+                }
+                if (created == null) throw occupied;
+                // The configured port remains the public endpoint. A later JVM gets a
+                // loopback-only relay port and is routed by the first dashboard through
+                // the local registry, so users never have to switch to 28797/28798.
+                RankBoardMod.LOGGER.warn(
+                        "RankBoard web port {} is already in use; this server will use internal relay port {} and join the shared local switcher",
+                        port, selectedPort);
+            }
+            http = created;
+            webPort = selectedPort;
             http.createContext("/api/rankings", WebDashboard::rankings);
             http.createContext("/api/site", WebDashboard::site);
             http.createContext("/api/sites", WebDashboard::sites);
@@ -116,7 +154,10 @@ final class WebDashboard {
                 return thread;
             }));
             http.start();
-            RankBoardMod.LOGGER.info("RankBoard web dashboard listening on http://{}:{}/", host, port);
+            registerLocalInstance(host);
+            RankBoardMod.LOGGER.info("RankBoard web dashboard listening on http://{}:{}/{}",
+                    internalRelayPort ? "127.0.0.1" : host, selectedPort,
+                    internalRelayPort ? " (shared public port " + configuredWebPort + ")" : "");
         } catch (Exception exception) {
             http = null;
             RankBoardMod.LOGGER.error("Failed to start RankBoard web dashboard", exception);
@@ -125,7 +166,15 @@ final class WebDashboard {
 
     static synchronized void stop() {
         if (http != null) http.stop(1);
+        if (registryScheduler != null) registryScheduler.shutdownNow();
+        registryScheduler = null;
+        if (registryFile != null) {
+            try { Files.deleteIfExists(registryFile); }
+            catch (IOException exception) { RankBoardMod.LOGGER.debug("Could not remove local web registry {}", registryFile, exception); }
+        }
+        registryFile = null;
         http = null;
+        internalRelayPort = false;
         minecraft = null;
         websiteIcon = null;
         websiteIconBytes = null;
@@ -148,12 +197,113 @@ final class WebDashboard {
 
     static void invalidateRankings() { RANKING_CACHE.clear(); }
 
+    /** Name shown by the web server switcher and by the in-game OP hint. */
+    static String switcherDisplayName() { return switcherName; }
+
+    /** Whether this instance has configured peer dashboards to switch to. */
+    static boolean hasSwitcherPeers() { return !switcherPeers.isEmpty() || !discoverLocalPeers().isEmpty(); }
+
     static int clearRateLimits() {
         int cleared = REQUEST_WINDOWS.size() + BURST_PENALTIES.size();
         REQUEST_WINDOWS.clear();
         BURST_PENALTIES.clear();
         LAST_CLEANUP.set(0);
         return cleared;
+    }
+
+    /** Returns the actual listening port, or zero before the dashboard starts. */
+    static int activePort() { return http == null ? 0 : webPort; }
+
+    /** Returns the port requested in rankboard-web.properties. */
+    static int configuredPort() { return configuredWebPort; }
+
+    /**
+     * Registers this dashboard in a small per-user temporary directory. A TCP port cannot be
+     * shared by two JVMs, so a later server uses the next free port and the first dashboard can
+     * discover it without requiring a manual peer entry.
+     */
+    private static void registerLocalInstance(String configuredHost) {
+        try {
+            Path directory = Path.of(System.getProperty("java.io.tmpdir"), "rankboard-web");
+            Files.createDirectories(directory);
+            registryFile = directory.resolve("instance-" + UUID.randomUUID() + ".json");
+            writeLocalRegistry(configuredHost);
+            final String host = configuredHost;
+            registryScheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
+                Thread thread = new Thread(runnable, "RankBoard-Web-Registry");
+                thread.setDaemon(true);
+                return thread;
+            });
+            registryScheduler.scheduleAtFixedRate(() -> writeLocalRegistry(host), 15, 15, TimeUnit.SECONDS);
+        } catch (IOException | RuntimeException exception) {
+            RankBoardMod.LOGGER.debug("Could not register local RankBoard web dashboard", exception);
+        }
+    }
+
+    private static void writeLocalRegistry(String configuredHost) {
+        Path target = registryFile;
+        if (target == null || http == null) return;
+        try {
+            String host = configuredHost == null ? "" : configuredHost.strip();
+            if (internalRelayPort || host.isEmpty() || host.equals("0.0.0.0") || host.equals("::") || host.equals("[::]")) {
+                host = "127.0.0.1";
+            }
+            if (host.startsWith("[") && host.endsWith("]")) host = host.substring(1, host.length() - 1);
+            JsonObject entry = new JsonObject();
+            entry.addProperty("id", instanceId);
+            entry.addProperty("url", "http://" + (host.contains(":") ? "[" + host + "]" : host) + ":" + webPort);
+            entry.addProperty("requestedPort", configuredWebPort);
+            entry.addProperty("name", switcherName);
+            entry.addProperty("weight", switcherWeight);
+            entry.addProperty("updatedAt", System.currentTimeMillis());
+            Path temporary = target.resolveSibling(target.getFileName() + ".tmp");
+            Files.writeString(temporary, entry.toString(), StandardCharsets.UTF_8);
+            try { Files.move(temporary, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE); }
+            catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
+                Files.move(temporary, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException | RuntimeException exception) {
+            RankBoardMod.LOGGER.debug("Could not update local RankBoard web registry {}", target, exception);
+        }
+    }
+
+    private static List<LocalPeer> discoverLocalPeers() {
+        Path directory = Path.of(System.getProperty("java.io.tmpdir"), "rankboard-web");
+        if (!Files.isDirectory(directory)) return List.of();
+        long cutoff = System.currentTimeMillis() - 45_000L;
+        List<LocalPeer> peers = new ArrayList<>();
+        try (var files = Files.list(directory)) {
+            files.filter(path -> path.getFileName().toString().startsWith("instance-")
+                            && path.getFileName().toString().endsWith(".json"))
+                    .forEach(path -> {
+                        if (path.equals(registryFile)) return;
+                        try {
+                            JsonObject entry = JsonParser.parseString(Files.readString(path, StandardCharsets.UTF_8))
+                                    .getAsJsonObject();
+                            if (entry.get("requestedPort").getAsInt() != configuredWebPort
+                                    || entry.get("updatedAt").getAsLong() < cutoff) {
+                                Files.deleteIfExists(path);
+                                return;
+                            }
+                            String id = entry.has("id") ? entry.get("id").getAsString() : "";
+                            String url = normalizePeer(entry.get("url").getAsString());
+                            if (url != null && !id.isBlank()) {
+                                String name = entry.has("name") ? entry.get("name").getAsString() : url;
+                                int weight = entry.has("weight") ? entry.get("weight").getAsInt() : 100;
+                                peers.add(new LocalPeer(id, url, name, weight));
+                            }
+                        } catch (IOException | RuntimeException ignored) {
+                            // Ignore a file being replaced by another dashboard or a stale corrupt entry.
+                        }
+                    });
+        } catch (IOException | RuntimeException ignored) { }
+        return peers;
+    }
+
+    private static LocalPeer findLocalPeer(String id) {
+        if (id == null || id.isBlank() || id.equals(instanceId)) return null;
+        return discoverLocalPeers().stream().filter(peer -> peer.id.equals(id)).findFirst().orElse(null);
     }
 
     private static Path resolveIcon(MinecraftServer server, String configuredPath) {
@@ -256,16 +406,72 @@ final class WebDashboard {
         }
     }
 
+    private static String resolveDefaultSwitcherName(MinecraftServer server, String displayName) {
+        Properties serverProperties = new Properties();
+        Path path = server.getRunDirectory().resolve("server.properties");
+        String gameMode = "survival";
+        try (var reader = Files.newBufferedReader(path)) {
+            serverProperties.load(reader);
+            gameMode = serverProperties.getProperty("gamemode", gameMode).strip();
+        } catch (IOException exception) {
+            RankBoardMod.LOGGER.debug("Could not read default game mode from {}", path, exception);
+        }
+        if (gameMode.isEmpty()) gameMode = "survival";
+        String name = displayName == null || displayName.isBlank() ? "Minecraft Server" : displayName.strip();
+        return name + " · " + gameMode;
+    }
+
+    /**
+     * Routes a same-port server selection to the JVM that owns that server. The
+     * selected instance is identified by the query parameter added to the
+     * same-origin switcher URL; its relay port stays private to localhost.
+     */
+    private static boolean proxyLocalPeer(HttpExchange exchange) throws IOException {
+        String selectedId = query(exchange.getRequestURI().getRawQuery()).getOrDefault("server", "").strip();
+        if (selectedId.isEmpty() || selectedId.equals(instanceId)) return false;
+        LocalPeer peer = findLocalPeer(selectedId);
+        if (peer == null) {
+            respond(exchange, 404, "application/json; charset=utf-8", "{\"error\":\"服务器实例不可用\"}");
+            return true;
+        }
+        String rawQuery = exchange.getRequestURI().getRawQuery();
+        String forwardedQuery = rawQuery == null ? "" : java.util.Arrays.stream(rawQuery.split("&"))
+                .filter(part -> !part.startsWith("server=") && !part.startsWith("server%3D"))
+                .collect(java.util.stream.Collectors.joining("&"));
+        String target = peer.url + exchange.getRequestURI().getPath()
+                + (forwardedQuery.isEmpty() ? "" : "?" + forwardedQuery);
+        try {
+            HttpRequest request = HttpRequest.newBuilder(URI.create(target))
+                    .timeout(Duration.ofSeconds(5)).GET().build();
+            HttpResponse<byte[]> response = PEER_CLIENT.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            for (String header : List.of("Content-Type", "Cache-Control", "ETag", "Retry-After",
+                    "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Window",
+                    "X-RateLimit-Burst-Requests", "X-RateLimit-Penalty-Active", "X-RateLimit-Penalty-Until")) {
+                response.headers().firstValue(header).ifPresent(value -> exchange.getResponseHeaders().set(header, value));
+            }
+            byte[] body = response.body();
+            exchange.sendResponseHeaders(response.statusCode(), body.length);
+            try (var output = exchange.getResponseBody()) { output.write(body); }
+        } catch (Exception exception) {
+            respond(exchange, 503, "application/json; charset=utf-8", "{\"error\":\"服务器实例暂时不可用\"}");
+        }
+        return true;
+    }
+
     private static void rankings(HttpExchange exchange) throws IOException {
-        if (!enforceRateLimit(exchange, RequestKind.API_DATA)) return;
+        if (proxyLocalPeer(exchange)) return;
         String cacheKey = exchange.getRequestURI().getRawQuery();
         if (cacheKey == null) cacheKey = "";
         CachedRanking cached = RANKING_CACHE.get(cacheKey);
         long now = System.currentTimeMillis();
         if (cached != null && now - cached.createdAt < rankingRefreshIntervalSeconds * 1000L) {
+            // A browser may request the same rendered snapshot while scrolling or
+            // restoring a tab. Cache hits do not perform a new data read and must
+            // not consume the API request budget or trigger a burst penalty.
             respond(exchange, 200, "application/json; charset=utf-8", cached.body);
             return;
         }
+        if (!enforceRateLimit(exchange, RequestKind.API_DATA)) return;
         try {
             Map<String, String> query = query(exchange.getRequestURI().getRawQuery());
             String period = query.getOrDefault("period", "day");
@@ -421,11 +627,15 @@ final class WebDashboard {
     }
 
     private static void site(HttpExchange exchange) throws IOException {
+        if (proxyLocalPeer(exchange)) return;
         if (!enforceRateLimit(exchange, RequestKind.API_DATA)) return;
         JsonObject root = new JsonObject();
         root.addProperty("name", serverName);
         root.addProperty("switcherName", switcherName);
         root.addProperty("switcherWeight", switcherWeight);
+        root.addProperty("requestedPort", configuredWebPort);
+        root.addProperty("port", webPort);
+        root.addProperty("portFallback", webPort != configuredWebPort);
         root.addProperty("rankingRefreshIntervalSeconds", rankingRefreshIntervalSeconds);
         root.addProperty("themeFollowIcon", Boolean.parseBoolean(
                 webTheme.getProperty("web-theme-follow-icon", "true")));
@@ -453,14 +663,30 @@ final class WebDashboard {
     }
 
     private static void sites(HttpExchange exchange) throws IOException {
-        if (!enforceRateLimit(exchange, RequestKind.API_DATA)) return;
-        String currentUrl = currentOrigin(exchange);
+        // Server discovery is a lightweight switcher request. It is polled only when
+        // the page loads and every 30 seconds, so it must not compete with ranking
+        // snapshots for the per-IP data budget.
+        String origin = currentOrigin(exchange);
+        String selectedId = query(exchange.getRequestURI().getRawQuery()).getOrDefault("server", "").strip();
         LinkedHashMap<String, SiteEntry> unique = new LinkedHashMap<>();
-        SiteEntry current = new SiteEntry(switcherName, currentUrl, switcherWeight, true, true);
-        unique.put(endpointKey(currentUrl), current);
+        boolean currentIsLocal = selectedId.isEmpty() || selectedId.equals(instanceId);
+        SiteEntry current = new SiteEntry(switcherName,
+                currentIsLocal ? origin : origin + "?server=" + selectedId,
+                switcherWeight, currentIsLocal, true);
+        unique.put("local:" + instanceId, current);
+
+        // All JVMs configured with the same web port share the first public listener.
+        // Their private relay ports never escape to the browser; each entry is a
+        // same-origin URL carrying the instance id for the relay router.
+        for (LocalPeer peer : discoverLocalPeers()) {
+            String url = origin + "?server=" + peer.id;
+            unique.put("local:" + peer.id,
+                    new SiteEntry(peer.name, url, peer.weight, peer.id.equals(selectedId), true));
+        }
 
         List<CompletableFuture<SiteEntry>> pending = new ArrayList<>();
-        for (String raw : switcherPeers) {
+        List<String> allPeers = new ArrayList<>(switcherPeers);
+        for (String raw : allPeers) {
             String url = normalizePeer(raw);
             if (url == null) continue;
             String key = endpointKey(url);
@@ -473,7 +699,7 @@ final class WebDashboard {
         } catch (Exception ignored) { }
         for (CompletableFuture<SiteEntry> future : pending) {
             SiteEntry entry = future.getNow(null);
-            if (entry != null) unique.put(endpointKey(entry.url), entry);
+            if (entry != null) unique.put("peer:" + endpointKey(entry.url), entry);
         }
         List<SiteEntry> entries = unique.values().stream().filter(java.util.Objects::nonNull)
                 .sorted(Comparator.comparingInt(SiteEntry::weight)
@@ -595,6 +821,7 @@ final class WebDashboard {
     }
 
     private static void siteIcon(HttpExchange exchange) throws IOException {
+        if (proxyLocalPeer(exchange)) return;
         String etag = '"' + websiteIconVersion + '"';
         exchange.getResponseHeaders().set("Cache-Control", "public, max-age=31536000, immutable");
         exchange.getResponseHeaders().set("ETag", etag);
@@ -818,6 +1045,8 @@ final class WebDashboard {
     private record CachedRanking(long createdAt, String body) { }
 
     private record SiteEntry(String name, String url, int weight, boolean current, boolean online) { }
+
+    private record LocalPeer(String id, String url, String name, int weight) { }
 
     private record PeerSnapshot(String name, int weight, boolean online, long checkedAt) { }
 

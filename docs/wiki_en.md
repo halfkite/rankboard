@@ -148,6 +148,8 @@ web-public-address=
 web-switcher-name=auto
 web-switcher-weight=100
 web-switcher-peers=
+web-switcher-op-hint-enabled=true
+web-port-fallback-enabled=true
 ```
 
 - `config/rankboard/server-icon.png` has priority; the server-root `server-icon.png` is the fallback.
@@ -155,6 +157,8 @@ web-switcher-peers=
 - `web-theme-follow-icon=true` derives a palette from the icon. Theme fields also accept `#RRGGBB` values.
 - `/leaderboard webtheme blue` restores the blue palette, `/leaderboard webtheme icon` uses icon colors, and `/leaderboard webtheme rgb #3F505E` applies a custom palette.
 - `/leaderboard webswitch add <address>` adds another RankBoard site. Equal IP-and-port pairs are merged automatically.
+- When multiple sites are online, a switch button appears in the web page's top-left. `auto` uses the server name (MOTD) plus the default game mode from `server.properties`; operators are reminded to set a unique name and can disable that reminder with `web-switcher-op-hint-enabled=false`.
+- If multiple servers use the same web port, later instances automatically select the next free port and join the local switcher; set `web-port-fallback-enabled=false` to disable this.
 
 Common API endpoints:
 

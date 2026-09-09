@@ -150,6 +150,8 @@ web-public-address=
 web-switcher-name=auto
 web-switcher-weight=100
 web-switcher-peers=
+web-switcher-op-hint-enabled=true
+web-port-fallback-enabled=true
 ```
 
 - `config/rankboard/server-icon.png` 优先；缺失时回退到服务器根目录的 `server-icon.png`。
@@ -157,6 +159,8 @@ web-switcher-peers=
 - `web-theme-follow-icon=true` 会从图标取色；也可将主题项设置为 `#RRGGBB`。
 - `/leaderboard webtheme blue` 恢复蓝色主题，`/leaderboard webtheme icon` 使用图标配色，`/leaderboard webtheme rgb #3F505E` 设置自定义色系。
 - `/leaderboard webswitch add <地址>` 添加同一局域网或其他服务器的 RankBoard 网页；相同 IP 与端口会自动合并。
+- 配置多个在线网页后，网页左上角会出现切换按钮；`auto` 名称默认使用服务器名（MOTD）和 `server.properties` 的默认游戏模式。OP 进服时会提示设置唯一名称，可用 `web-switcher-op-hint-enabled=false` 关闭。
+- 如果多个服务器使用同一网页端口，后启动的实例会自动使用下一个空闲端口并加入本机切换列表；可用 `web-port-fallback-enabled=false` 禁用。
 
 常用 API：
 

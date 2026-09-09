@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Download, ExternalLink, Github, LayoutPanelTop, PackageOpen, Server } from "lucide-react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Download, ExternalLink, Github, LayoutPanelTop, PackageOpen, Rows3, Server, Table2 } from "lucide-react";
 import BlurText from "@/components/BlurText/BlurText";
 
 type Metric = {
@@ -20,6 +20,7 @@ type Player = {
 };
 
 type RankingResponse = {
+  metric?: string;
   label: string;
   formattedTotal: string;
   players: Player[];
@@ -67,11 +68,11 @@ type Language = "zh" | "en";
 
 const UI_TEXT: Record<Language, Record<string, string>> = {
   zh: {
-    language: "中文", currentOnline: "当前在线", lastOnlineUnknown: "最后在线：未知", lastOnline: "最后在线",
+    language: "中文", languageLabel: "语言", currentOnline: "当前在线", lastOnlineUnknown: "最后在线：未知", lastOnline: "最后在线",
     total: "总和", query: "查询", all: "总榜", day: "最近一日", week: "最近一周", month: "最近一月", custom: "自定义日期",
-    compact: "紧凑视图", normal: "普通视图", switchServer: "服务器切换", current: "当前", switch: "切换", offline: "离线",
+    compact: "紧凑视图", tile: "平铺视图", detail: "详细视图", normal: "普通视图", layoutMode: "布局", switchServer: "服务器切换", current: "当前", switch: "切换", offline: "离线",
     statisticsPeriod: "统计周期", onlineOnly: "仅显示当前在线玩家", metricCategory: "榜单分类", downloadMod: "下载模组", sourceCode: "查看源码",
-    searchPlayer: "搜索玩家", enterPlayerName: "输入玩家名称", export: "导出表格", exportTitle: "导出当前筛选结果为 CSV 表格",
+    searchPlayer: "搜索玩家", enterPlayerName: "输入玩家名称", export: "导出表格", exportTitle: "导出当前筛选结果为 CSV 表格", copyIdentity: "点击复制玩家名称和 UUID", copied: "已复制玩家名称和 UUID",
     startDate: "开始日期", endDate: "结束日期", earliest: "最早可查", backgroundCheck: "后台校验", loading: "正在读取服务器排行榜...",
     noPlayers: "当前筛选下没有可显示的玩家。", partial: "部分统计", incompleteRange: "统计范围缺少完整边界",
     historySync: "历史统计同步", onlyOnline: "仅在线玩家", rank: "排名", playerName: "玩家名称", uuid: "UUID", value: "数值",
@@ -82,11 +83,11 @@ const UI_TEXT: Record<Language, Record<string, string>> = {
     craftedDetail: "制造", redstoneDetail: "红石", modTitle: "RankBoard排行榜模组"
   },
   en: {
-    language: "English", currentOnline: "Online now", lastOnlineUnknown: "Last online: unknown", lastOnline: "Last online",
+    language: "English", languageLabel: "Language", currentOnline: "Online now", lastOnlineUnknown: "Last online: unknown", lastOnline: "Last online",
     total: "Total", query: "Query", all: "All time", day: "Last day", week: "Last week", month: "Last month", custom: "Custom dates",
-    compact: "Compact view", normal: "Normal view", switchServer: "Server switcher", current: "Current", switch: "Switch", offline: "Offline",
+    compact: "Compact view", tile: "Tile view", detail: "Detailed view", normal: "Normal view", layoutMode: "Layout", switchServer: "Server switcher", current: "Current", switch: "Switch", offline: "Offline",
     statisticsPeriod: "Statistics period", onlineOnly: "Show online players only", metricCategory: "Leaderboards", downloadMod: "Download mod", sourceCode: "View source",
-    searchPlayer: "Search players", enterPlayerName: "Enter a player name", export: "Export table", exportTitle: "Export the filtered result as a CSV table",
+    searchPlayer: "Search players", enterPlayerName: "Enter a player name", export: "Export table", exportTitle: "Export the filtered result as a CSV table", copyIdentity: "Click to copy player name and UUID", copied: "Player name and UUID copied",
     startDate: "Start date", endDate: "End date", earliest: "Earliest available", backgroundCheck: "Background verification", loading: "Loading server leaderboard...",
     noPlayers: "No players are available for the current filters.", partial: "Partial statistics", incompleteRange: "The selected range has incomplete boundaries",
     historySync: "History synchronized", onlyOnline: "Online players only", rank: "Rank", playerName: "Player name", uuid: "UUID", value: "Value",
@@ -175,7 +176,7 @@ function applyTheme(theme: SiteTheme, iconColor: string | null) {
   });
 }
 
-function PlayerAvatar({ player, language }: { player: Player; language: Language }) {
+function PlayerAvatar({ player, language, onCopy, copyTitle }: { player: Player; language: Language; onCopy?: () => void; copyTitle?: string }) {
   const [sourceIndex, setSourceIndex] = useState(0);
   const uuid = player.uuid.replaceAll("-", "");
   const sources = [
@@ -185,7 +186,11 @@ function PlayerAvatar({ player, language }: { player: Player; language: Language
   ];
 
   if (sourceIndex >= sources.length) {
-    return <span className="avatar avatar-fallback" aria-hidden="true">{player.name.slice(0, 1).toUpperCase()}</span>;
+    return <span className={`avatar avatar-fallback${onCopy ? " avatar-copyable" : ""}`} role={onCopy ? "button" : undefined}
+      tabIndex={onCopy ? 0 : undefined} title={copyTitle} aria-label={copyTitle}
+      onClick={onCopy} onKeyDown={(event) => { if (onCopy && (event.key === "Enter" || event.key === " ")) onCopy(); }}>
+      {player.name.slice(0, 1).toUpperCase()}
+    </span>;
   }
 
   return (
@@ -193,9 +198,14 @@ function PlayerAvatar({ player, language }: { player: Player; language: Language
       className="avatar"
       src={sources[sourceIndex]}
       alt={language === "zh" ? `${player.name} 的头像` : `${player.name}'s avatar`}
+      title={copyTitle}
+      role={onCopy ? "button" : undefined}
+      tabIndex={onCopy ? 0 : undefined}
       loading="lazy"
       referrerPolicy="no-referrer"
       onError={() => setSourceIndex((current) => current + 1)}
+      onClick={onCopy}
+      onKeyDown={(event) => { if (onCopy && (event.key === "Enter" || event.key === " ")) onCopy(); }}
     />
   );
 }
@@ -207,6 +217,31 @@ function formatLastOnline(player: Player, language: Language) {
   return `${text.lastOnline}: ${new Date(player.lastOnline).toLocaleString(language === "zh" ? "zh-CN" : "en-US", {
     year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false
   })}`;
+}
+
+function lastOnlineParts(player: Player, language: Language) {
+  const text = UI_TEXT[language];
+  if (player.online) return { time: text.currentOnline, date: "" };
+  if (player.lastOnline <= 0) return { time: text.lastOnlineUnknown, date: "" };
+  const value = new Date(player.lastOnline);
+  return {
+    time: value.toLocaleTimeString(language === "zh" ? "zh-CN" : "en-US", {
+      hour: "2-digit", minute: "2-digit", hour12: false
+    }),
+    date: value.toLocaleDateString(language === "zh" ? "zh-CN" : "en-US", {
+      year: "numeric", month: "numeric", day: "numeric"
+    })
+  };
+}
+
+function LastOnline({ player, language }: { player: Player; language: Language }) {
+  const parts = lastOnlineParts(player, language);
+  return (
+    <span className={player.online ? "last-online online" : "last-online"}>
+      <span className="last-online-time">{parts.time}</span>
+      {parts.date && <span className="last-online-date">{parts.date}</span>}
+    </span>
+  );
 }
 
 /** Places the precise total first and the abbreviated web value below it. */
@@ -231,25 +266,25 @@ const periods = [
 
 const defaultMetrics: Metric[] = [
   { id: "playtime", label: "在线榜", detail: "活跃度" },
-  { id: "afk", label: "摸鱼榜", detail: "摸鱼" },
+  { id: "placed", label: "放置榜", detail: "建造" },
+  { id: "mined", label: "挖掘榜", detail: "资源" },
+  { id: "deaths", label: "死亡榜", detail: "生存" },
+  { id: "elytra", label: "飞行榜", detail: "探索" },
   { id: "food", label: "大胃王榜", detail: "食物" },
   { id: "jumps", label: "跳跃榜", detail: "移动" },
-  { id: "mined", label: "挖掘榜", detail: "资源" },
-  { id: "bedrock", label: "破基岩榜", detail: "基岩" },
-  { id: "placed", label: "放置榜", detail: "建造" },
-  { id: "breeding", label: "繁殖榜", detail: "繁殖" },
   { id: "kills", label: "击杀榜", detail: "战斗" },
-  { id: "pvp", label: "PvP榜", detail: "玩家对战" },
-  { id: "deaths", label: "死亡榜", detail: "生存" },
-  { id: "trades", label: "交易榜", detail: "经济" },
-  { id: "elytra", label: "飞行榜", detail: "探索" },
-  { id: "fishing", label: "钓鱼榜", detail: "休闲" },
   { id: "damage", label: "受伤榜", detail: "生存" },
   { id: "dealt", label: "输出榜", detail: "战斗" },
+  { id: "pvp", label: "PvP榜", detail: "玩家对战" },
+  { id: "breeding", label: "繁殖榜", detail: "繁殖" },
+  { id: "trades", label: "交易榜", detail: "经济" },
+  { id: "fishing", label: "钓鱼榜", detail: "休闲" },
   { id: "dropped", label: "丢垃圾榜", detail: "物品" },
   { id: "picked", label: "拾荒榜", detail: "物品" },
   { id: "crafted", label: "合成榜", detail: "制造" },
-  { id: "redstone", label: "红石大蛇榜", detail: "红石" }
+  { id: "redstone", label: "红石大蛇榜", detail: "红石" },
+  { id: "afk", label: "摸鱼榜", detail: "摸鱼" },
+  { id: "bedrock", label: "破基岩榜", detail: "基岩" }
 ];
 
 const today = new Date().toISOString().slice(0, 10);
@@ -261,7 +296,12 @@ function periodLabel(id: string, language: Language) {
 function metricLabel(item: Metric, language: Language) {
   const translated = METRIC_TEXT[item.id];
   const defaultItem = defaultMetrics.find((candidate) => candidate.id === item.id);
-  return translated && defaultItem?.label === item.label ? translated[language] : item.label;
+  // The API returns the configured label (normally the Chinese default).  Keep
+  // administrator custom labels intact, while translating known built-in
+  // labels whenever the user switches languages.
+  const isBuiltInLabel = translated && (defaultItem?.label === item.label
+    || translated.zh === item.label || translated.en === item.label);
+  return isBuiltInLabel ? translated[language] : item.label;
 }
 
 function metricDetail(item: Metric, language: Language) {
@@ -276,10 +316,31 @@ function languageFromCode(value: string | undefined): Language | null {
   return null;
 }
 
+/** Localises the game-mode suffix generated for automatic server switcher names. */
+function localizedServerName(name: string, language: Language) {
+  if (name === "Minecraft Server") return language === "zh" ? "Minecraft 服务器" : name;
+  const modes: Record<string, { zh: string; en: string }> = {
+    survival: { zh: "生存", en: "Survival" },
+    creative: { zh: "创造", en: "Creative" },
+    adventure: { zh: "冒险", en: "Adventure" },
+    spectator: { zh: "旁观", en: "Spectator" }
+  };
+  return name.replace(/(\s*[·•]\s*)(survival|creative|adventure|spectator)\s*$/i,
+    (_match, separator: string, mode: string) => `${separator}${modes[mode.toLowerCase()][language]}`);
+}
+
 function explicitLanguage(): Language | null {
   const queryLanguage = languageFromCode(new URLSearchParams(window.location.search).get("lang") ?? undefined);
   if (queryLanguage) return queryLanguage;
   return languageFromCode(localStorage.getItem("rankboard-language") ?? undefined);
+}
+
+/** Keeps same-port local server selections on the shared dashboard listener. */
+function serverScoped(path: string) {
+  const server = new URLSearchParams(window.location.search).get("server");
+  if (!server) return path;
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}server=${encodeURIComponent(server)}`;
 }
 
 export default function App() {
@@ -302,7 +363,20 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sites, setSites] = useState<SiteLink[]>([]);
-  const [compactMode, setCompactMode] = useState(() => localStorage.getItem("rankboard-compact-mode") === "true");
+  const [serverMenuOpen, setServerMenuOpen] = useState(false);
+  const [layoutMode, setLayoutMode] = useState<"normal" | "compact" | "tile">(() => {
+    const saved = localStorage.getItem("rankboard-layout-mode");
+    if (saved === "normal" || saved === "compact" || saved === "tile") return saved;
+    if (localStorage.getItem("rankboard-compact-mode") === "true") return "compact";
+    return window.matchMedia?.("(max-width: 800px)").matches ? "compact" : "tile";
+  });
+  const [tileSortMetric, setTileSortMetric] = useState("playtime");
+  const tileTableWrapRef = useRef<HTMLDivElement | null>(null);
+  const tileTableTopScrollRef = useRef<HTMLDivElement | null>(null);
+  const [tileTableScrollWidth, setTileTableScrollWidth] = useState(1500);
+  const [copiedIdentity, setCopiedIdentity] = useState<string | null>(null);
+  const compactMode = layoutMode === "compact";
+  const tileMode = layoutMode === "tile";
   const text = UI_TEXT[language];
 
   useEffect(() => {
@@ -316,12 +390,12 @@ export default function App() {
       setLoading(true);
       setError(null);
       try {
-        const params = new URLSearchParams({ period, metric, online: String(onlineOnly), compact: String(compactMode) });
+        const params = new URLSearchParams({ period, metric, online: String(onlineOnly), compact: String(compactMode || tileMode) });
         if (period === "custom") {
           params.set("from", from);
           params.set("to", to);
         }
-        const response = await fetch(`/api/rankings?${params}`);
+        const response = await fetch(serverScoped(`/api/rankings?${params}`));
         const body = await response.text();
         let payload: (RankingResponse & { error?: string }) | null = null;
         try {
@@ -332,9 +406,6 @@ export default function App() {
         if (!response.ok || !payload) throw new Error(payload?.error ?? (language === "zh" ? "服务器排行榜服务未启动或不可访问" : "The leaderboard service is unavailable"));
         if (!cancelled) {
           setRanking(payload);
-          setMetrics((items) => items.map((item) => item.id === metric
-            ? { ...item, label: payload.label }
-            : item));
         }
       } catch (requestError) {
         if (!cancelled) {
@@ -352,18 +423,20 @@ export default function App() {
       window.clearTimeout(timer);
       window.clearInterval(interval);
     };
-  }, [period, metric, onlineOnly, from, to, compactMode, rankingRefreshIntervalSeconds, language]);
+  }, [period, metric, onlineOnly, from, to, layoutMode, compactMode, tileMode, rankingRefreshIntervalSeconds, language]);
 
   useEffect(() => {
+    localStorage.setItem("rankboard-layout-mode", layoutMode);
+    // Keep the old key for clients upgraded from the two-layout version.
     localStorage.setItem("rankboard-compact-mode", String(compactMode));
-  }, [compactMode]);
+  }, [layoutMode, compactMode]);
 
   useEffect(() => {
     applyTheme(siteTheme, iconColor);
   }, [siteTheme, iconColor]);
 
   useEffect(() => {
-    fetch("/api/site")
+    fetch(serverScoped("/api/site"))
       .then((response) => response.ok ? response.json() as Promise<{
         name?: string;
         rankingRefreshIntervalSeconds?: number;
@@ -404,7 +477,7 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-    const loadSites = () => fetch("/api/sites")
+    const loadSites = () => fetch(serverScoped("/api/sites"))
       .then((response) => response.ok ? response.json() as Promise<{ sites?: SiteLink[] }> : null)
       .then((payload) => {
         if (!cancelled && payload?.sites) setSites(payload.sites);
@@ -423,7 +496,7 @@ export default function App() {
     let cancelled = false;
     let objectUrl: string | null = null;
     let retryTimer: number | null = null;
-    const iconUrl = `/site-icon/header?v=${encodeURIComponent(iconVersion)}`;
+    const iconUrl = serverScoped(`/site-icon/header?v=${encodeURIComponent(iconVersion)}`);
 
     const loadIcon = async (attempt: number) => {
       try {
@@ -469,7 +542,7 @@ export default function App() {
 
   const exportTable = () => {
     if (!ranking || visiblePlayers.length === 0) return;
-    const metricColumns = compactMode ? metrics : [activeMetric];
+    const metricColumns = compactMode || tileMode ? metrics : [activeMetric];
     const headers = [text.rank, text.playerName, text.uuid, text.lastOnline, ...metricColumns.map((item) => metricLabel(item, language))];
     const rows = visiblePlayers.map((player) => [
       player.rank,
@@ -487,110 +560,207 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
+  const selectMetric = (id: string) => {
+    setMetric(id);
+    setTileSortMetric(id);
+  };
+
+  const copyIdentity = async (player: Player) => {
+    const value = `${player.name}\n${player.uuid}`;
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      const input = document.createElement("textarea");
+      input.value = value;
+      input.style.position = "fixed";
+      input.style.opacity = "0";
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      input.remove();
+    }
+    setCopiedIdentity(player.uuid);
+    window.setTimeout(() => setCopiedIdentity((current) => current === player.uuid ? null : current), 1800);
+  };
+
+  const identityTitle = (player: Player) =>
+    `${copiedIdentity === player.uuid ? text.copied : text.copyIdentity}\n${player.name}\n${text.uuid}: ${player.uuid}`;
+
+  function tileMetricValue(player: Player, item: Metric) {
+    if (item.id === metric && ranking?.metric === metric) return player.value;
+    const display = player.metrics?.[item.id] ?? "0";
+    const exact = compactValue(display).exact.replaceAll(",", "");
+    if (item.id === "playtime" || item.id === "afk") {
+      const hours = Number.parseFloat(/([\d.]+)h/.exec(exact)?.[1] ?? "0");
+      const minutes = Number.parseFloat(/([\d.]+)m/.exec(exact)?.[1] ?? "0");
+      return hours * 60 + minutes;
+    }
+    return Number.parseFloat(/-?[\d.]+/.exec(exact)?.[0] ?? "0");
+  }
+
+  const tilePlayers = useMemo(() => {
+    const sorted = [...visiblePlayers];
+    if (!tileMode) return sorted;
+    sorted.sort((left, right) => {
+      const difference = tileMetricValue(right, metrics.find((item) => item.id === tileSortMetric) ?? activeMetric)
+        - tileMetricValue(left, metrics.find((item) => item.id === tileSortMetric) ?? activeMetric);
+      return difference || left.name.localeCompare(right.name);
+    });
+    return sorted.map((player, index) => ({ ...player, rank: index + 1 }));
+  }, [visiblePlayers, tileMode, tileSortMetric, metric, metrics, activeMetric]);
+
+  useLayoutEffect(() => {
+    if (!tileMode) return;
+    const scrollWrap = tileTableWrapRef.current;
+    if (!scrollWrap) return;
+    const updateScrollWidth = () => setTileTableScrollWidth(Math.max(1500, scrollWrap.scrollWidth));
+    updateScrollWidth();
+    const observer = new ResizeObserver(updateScrollWidth);
+    observer.observe(scrollWrap);
+    return () => observer.disconnect();
+  }, [tileMode, tilePlayers.length, metrics.length, language]);
+
+  const syncTileTableScroll = (source: HTMLDivElement) => {
+    const target = source === tileTableTopScrollRef.current ? tileTableWrapRef.current : tileTableTopScrollRef.current;
+    if (target && target.scrollLeft !== source.scrollLeft) target.scrollLeft = source.scrollLeft;
+  };
+
+  const controls = (
+    <>
+      <section>
+        <p className="section-label">{text.statisticsPeriod}</p>
+        <div className="period-list">
+          {periods.map((item) => (
+            <button key={item.id} className={item.id === period ? "selected" : ""} onClick={() => setPeriod(item.id)}>
+              {periodLabel(item.label, language)}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {!tileMode && <section>
+        <p className="section-label">{text.metricCategory}</p>
+        <div className="metric-list">
+          {metrics.map((item) => (
+            <button key={item.id} className={item.id === metric ? "selected" : ""} onClick={() => selectMetric(item.id)}>
+              <span>{metricLabel(item, language)}</span>
+              {!tileMode && <small>{metricDetail(item, language)}</small>}
+            </button>
+          ))}
+        </div>
+      </section>}
+
+      <nav className="mod-links" aria-label={text.websiteAria}>
+        <div className="mod-links-title">{text.modTitle}</div>
+        <a href="https://modrinth.com/project/rankboard" target="_blank" rel="noreferrer">
+          <PackageOpen aria-hidden="true" />
+          <span>
+            <small>{text.downloadMod}</small>
+            Modrinth
+          </span>
+          <ExternalLink className="external-icon" aria-hidden="true" />
+        </a>
+        <a href="https://github.com/halfkite/rankboard" target="_blank" rel="noreferrer">
+          <Github aria-hidden="true" />
+          <span>
+            <small>{text.sourceCode}</small>
+            halfkite/rankboard
+          </span>
+          <ExternalLink className="external-icon" aria-hidden="true" />
+        </a>
+      </nav>
+    </>
+  );
+
+  const viewOptions: Array<{ id: "tile" | "compact" | "normal"; label: string; Icon: typeof Table2 }> = [
+    { id: "tile", label: text.detail, Icon: Table2 },
+    { id: "compact", label: text.compact, Icon: Rows3 },
+    { id: "normal", label: text.normal, Icon: LayoutPanelTop }
+  ];
+
   return (
     <div className="app-shell">
       <header className="topbar glass">
         <div className="brand">
             {iconSource ? <img src={iconSource} onLoad={(event) => setIconColor(iconAverage(event.currentTarget))}
              alt={text.serverIcon} /> : <span className="brand-icon-placeholder">RB</span>}
-          <BlurText text={serverName} delay={35} animateBy="letters" direction="top" className="brand-title" />
+            <BlurText text={localizedServerName(serverName, language)} delay={35} animateBy="letters" direction="top" className="brand-title" />
         </div>
-        <div className="top-status">
-          <strong>{text.modTitle}</strong>
-          <span className={ranking?.cacheReady ? "signal online" : "signal"} />
-          {ranking?.onlineOnly ? text.onlyOnline : text.historySync}
-        </div>
-        <button
-          className="language-toggle"
-          type="button"
-          onClick={() => setLanguage((current) => current === "zh" ? "en" : "zh")}
-          aria-label={text.language}
-        >
-          Language: {text.language}
-        </button>
-        <button
-          className={compactMode ? "layout-toggle selected" : "layout-toggle"}
-          type="button"
-          aria-pressed={compactMode}
-          title={compactMode ? text.normal : text.compact}
-          onClick={() => setCompactMode((enabled) => !enabled)}
-        >
-          <LayoutPanelTop aria-hidden="true" />
-          <span>{compactMode ? text.normal : text.compact}</span>
-        </button>
-      </header>
-
-      <main className="workspace">
-        <aside className="sidebar glass">
+        <div className="top-controls" aria-label={text.layoutMode}>
           {sites.length > 1 && (
-            <section className="server-switcher">
-              <p className="section-label">{text.switchServer}</p>
-              <div className="server-list">
-                {sites.map((site) => (
-                  <button
-                    key={`${site.url}-${site.weight}`}
-                    className={site.current ? "selected" : ""}
-                    disabled={site.current || !site.online}
-                    title={site.online ? site.url : `${site.url} (${text.offline})`}
-                    onClick={() => window.location.assign(site.url)}
-                  >
-                    <Server aria-hidden="true" />
-                    <span>{site.name}</span>
-                    <small>{site.current ? text.current : site.online ? text.switch : text.offline}</small>
-                  </button>
-                ))}
-              </div>
-            </section>
-          )}
-          <section>
-            <p className="section-label">{text.statisticsPeriod}</p>
-            <div className="period-list">
-              {periods.map((item) => (
-                <button key={item.id} className={item.id === period ? "selected" : ""} onClick={() => setPeriod(item.id)}>
-                  {periodLabel(item.label, language)}
-                </button>
-              ))}
+            <div className="top-server-switcher">
+              <button
+                type="button"
+                className="top-server-switch-button"
+                title={text.switchServer}
+                aria-expanded={serverMenuOpen}
+                aria-haspopup="menu"
+                onClick={() => setServerMenuOpen((open) => !open)}
+              >
+                <Server aria-hidden="true" />
+                <span>{text.switchServer}</span>
+                <span className="top-server-chevron" aria-hidden="true">▾</span>
+              </button>
+              {serverMenuOpen && <div className="top-server-list" role="menu">
+                {sites.map((site) => {
+                  const className = site.current ? "server-entry selected" : site.online ? "server-entry" : "server-entry disabled";
+                  const title = site.online ? site.url : `${site.url} (${text.offline})`;
+                  const content = (
+                    <>
+                      <span>{localizedServerName(site.name, language)}</span>
+                      <small>{site.current ? text.current : site.online ? text.switch : text.offline}</small>
+                    </>
+                  );
+                  if (site.current) {
+                    return <span key={`top-${site.url}-${site.weight}`} className={className} title={title} aria-current="page">{content}</span>;
+                  }
+                  if (!site.online) {
+                    return <span key={`top-${site.url}-${site.weight}`} className={className} title={title} aria-disabled="true">{content}</span>;
+                  }
+                  return <a key={`top-${site.url}-${site.weight}`} className={className} href={site.url} title={title}>{content}</a>;
+                })}
+              </div>}
             </div>
-          </section>
-
-          <label className="online-toggle">
+          )}
+          <div className="top-status">
+            <span className={ranking?.cacheReady ? "signal online" : "signal"} />
+            {text.historySync}
+          </div>
+          <label className={onlineOnly ? "online-toggle top-online-toggle selected" : "online-toggle top-online-toggle"}>
             <input type="checkbox" checked={onlineOnly} onChange={(event) => setOnlineOnly(event.target.checked)} />
             <span>{text.onlineOnly}</span>
           </label>
+          <button
+            className="language-toggle"
+            type="button"
+            onClick={() => setLanguage((current) => current === "zh" ? "en" : "zh")}
+            aria-label={text.language}
+          >
+            {text.languageLabel}: {text.language}
+          </button>
+          <div className="view-switcher" role="group" aria-label={text.layoutMode}>
+            {viewOptions.map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                className={layoutMode === id ? "view-button selected" : "view-button"}
+                type="button"
+                aria-pressed={layoutMode === id}
+                title={label}
+                onClick={() => setLayoutMode(id)}
+              >
+                <Icon aria-hidden="true" />
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </header>
 
-          <section>
-            <p className="section-label">{text.metricCategory}</p>
-            <div className="metric-list">
-              {metrics.map((item) => (
-                <button key={item.id} className={item.id === metric ? "selected" : ""} onClick={() => setMetric(item.id)}>
-                  <span>{metricLabel(item, language)}</span>
-                  <small>{metricDetail(item, language)}</small>
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <nav className="mod-links" aria-label={text.websiteAria}>
-            <a href="https://modrinth.com/project/rankboard" target="_blank" rel="noreferrer">
-              <PackageOpen aria-hidden="true" />
-              <span>
-                <small>{text.downloadMod}</small>
-                Modrinth
-              </span>
-              <ExternalLink className="external-icon" aria-hidden="true" />
-            </a>
-            <a href="https://github.com/halfkite/rankboard" target="_blank" rel="noreferrer">
-              <Github aria-hidden="true" />
-              <span>
-                <small>{text.sourceCode}</small>
-                halfkite/rankboard
-              </span>
-              <ExternalLink className="external-icon" aria-hidden="true" />
-            </a>
-          </nav>
-        </aside>
+      <main className={tileMode ? "workspace tile-workspace" : "workspace"}>
+        {!tileMode && <aside className="sidebar glass">{controls}</aside>}
 
         <section className="content-area">
+          {tileMode && <section className="tile-controls glass">{controls}</section>}
           <div className="toolbar glass">
             <label className="search-field">
               <span>{text.searchPlayer}</span>
@@ -633,7 +803,62 @@ export default function App() {
             </div>
           )}
 
-          <div className={compactMode ? "ranking-list compact-list" : "ranking-list"}>
+          {!loading && !error && visiblePlayers.length > 0 && tileMode && (
+            <>
+              <div
+                className="tile-table-scrollbar"
+                ref={tileTableTopScrollRef}
+                onScroll={(event) => syncTileTableScroll(event.currentTarget)}
+                aria-label={language === "zh" ? "横向滚动排行榜" : "Scroll leaderboard horizontally"}
+              >
+                <div style={{ width: `${tileTableScrollWidth}px` }} />
+              </div>
+              <div
+                className="tile-table-wrap glass"
+                ref={tileTableWrapRef}
+                onScroll={(event) => syncTileTableScroll(event.currentTarget)}
+              >
+              <table className="tile-table">
+                <thead>
+                  <tr>
+                    <th>{text.rank}</th>
+                    <th>{text.playerName}</th>
+                    <th>{text.lastOnline}</th>
+                    {metrics.map((item) => (
+                      <th key={item.id} className={tileSortMetric === item.id ? "sort-active" : ""}>
+                        <button type="button" onClick={() => selectMetric(item.id)} title={metricDetail(item, language)}>
+                          {metricLabel(item, language)}
+                        </button>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {tilePlayers.map((player) => (
+                    <tr key={player.uuid}>
+                      <td className="tile-rank">{String(player.rank).padStart(2, "0")}</td>
+                      <td>
+                        <div className="tile-player"><PlayerAvatar player={player} language={language} onCopy={() => copyIdentity(player)} copyTitle={identityTitle(player)} /><span title={identityTitle(player)}>{player.name}</span></div>
+                      </td>
+                      <td><LastOnline player={player} language={language} /></td>
+                      {metrics.map((item) => {
+                        const display = player.metrics?.[item.id] ?? (item.id === metric ? player.formatted : "0");
+                        const value = compactValue(display);
+                        return (
+                          <td key={item.id} className="metric-cell" title={value.short ? value.exact : undefined}>
+                            <span className="tile-exact">{value.short || value.exact}</span>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              </div>
+            </>
+          )}
+
+          {!tileMode && <div className={compactMode ? "ranking-list compact-list" : "ranking-list"}>
             {!loading && !error && visiblePlayers.length === 0 && (
               <div className="notice glass">{text.noPlayers}</div>
             )}
@@ -641,13 +866,12 @@ export default function App() {
               <article className="ranking-card compact-card glass" key={player.uuid}>
                 <div className="compact-player">
                   <span className="rank-number">{String(player.rank).padStart(2, "0")}</span>
-                  <PlayerAvatar player={player} language={language} />
+                  <PlayerAvatar player={player} language={language} onCopy={() => copyIdentity(player)} copyTitle={identityTitle(player)} />
                   <div className="player-info">
                     <div className="player-heading">
-                      <h2>{player.name}</h2>
-                      <span className={player.online ? "last-online online" : "last-online"}>{formatLastOnline(player, language)}</span>
+                      <h2 title={identityTitle(player)}>{player.name}</h2>
+                      <LastOnline player={player} language={language} />
                     </div>
-                    <p><code>UUID {player.uuid}</code></p>
                   </div>
                 </div>
                 <div className="compact-metrics" aria-label={`${player.name}${text.allMetrics}`}>
@@ -667,18 +891,19 @@ export default function App() {
             ) : (
               <article className="ranking-card glass" key={player.uuid}>
                 <span className="rank-number">{String(player.rank).padStart(2, "0")}</span>
-                  <PlayerAvatar player={player} language={language} />
+                  <PlayerAvatar player={player} language={language} onCopy={() => copyIdentity(player)} copyTitle={identityTitle(player)} />
                 <div className="player-info">
                   <div className="player-heading">
-                    <h2>{player.name}</h2>
-                      <span className={player.online ? "last-online online" : "last-online"}>{formatLastOnline(player, language)}</span>
+                    <h2 title={identityTitle(player)}>{player.name}</h2>
+                    <LastOnline player={player} language={language} />
                   </div>
-                    <p><span>{metricDetail(activeMetric, language)}</span><code>{text.uuid} {player.uuid}</code></p>
+                  <p><span>{metricDetail(activeMetric, language)}</span></p>
                 </div>
                 <strong className="player-value">{player.formatted}</strong>
               </article>
             ))}
-          </div>
+          </div>}
+          {tileMode && !loading && !error && visiblePlayers.length === 0 && <div className="notice glass">{text.noPlayers}</div>}
         </section>
       </main>
     </div>

@@ -98,13 +98,15 @@ final class RankBoardConfig {
             option("avatar-cache-days", "7", FileKind.MAIN, "玩家头像缓存", "头像缓存有效天数；默认 7，范围 1-365。"),
             option("host", "0.0.0.0", FileKind.WEB, "网页监听", "网页监听地址；默认 0.0.0.0，表示监听所有 IPv4 地址。"),
             option("port", "8765", FileKind.WEB, "网页监听", "网页监听端口；默认 8765，范围 1-65535。"),
+            option("web-port-fallback-enabled", "true", FileKind.WEB, "网页监听", "端口被占用时是否启用本机共享端口中继；默认 true。关闭后第二个服务器不会启动网页。"),
             option("web-data-requests-per-second", "1", FileKind.WEB, "请求限流", "同一 IP 对同一数据接口或网页资源每秒最多请求次数；默认 1，范围 1-100。"),
             option("web-ranking-refresh-interval-seconds", "30", FileKind.WEB, "网页数据", "网页排行榜数据快照刷新间隔秒数；默认 30，范围 1-3600。"),
             option("server-name", "auto", FileKind.WEB, "网页显示", "网页显示的服务器名称；默认 auto，自动读取服务器 MOTD。"),
             option("web-default-language", "zh_cn", FileKind.WEB, "网页显示", "网页默认语言；可选 zh_cn、en_us 或 auto（auto 跟随浏览器），默认 zh_cn。"),
-            option("web-switcher-name", "auto", FileKind.WEB, "网页切换", "服务器切换按钮名称；auto 使用网页服务器名称。"),
+            option("web-switcher-name", "auto", FileKind.WEB, "网页切换", "服务器切换按钮名称；auto 使用服务器名称和默认游戏模式。"),
             option("web-switcher-weight", "100", FileKind.WEB, "网页切换", "服务器切换按钮排序权重；数值越小越靠前，1 最先显示。"),
             option("web-switcher-peers", "", FileKind.WEB, "网页切换", "其他 RankBoard 网页地址，逗号分隔；省略端口时沿用当前网页端口。"),
+            option("web-switcher-op-hint-enabled", "true", FileKind.WEB, "网页切换", "是否在 OP 进服时提醒设置服务器切换显示名称；默认 true。"),
             option("website-icon", "server-icon.png", FileKind.WEB, "网页显示", "网页图标路径；默认 server-icon.png，相对路径以服务端根目录为基准。"),
             option("web-theme-follow-icon", "true", FileKind.WEB, "网页主题", "true 从左上角网站图标提取网页配色；false 使用默认蓝色系；默认 true。"),
             option("web-theme-base", "auto", FileKind.WEB, "网页主题", "主题基础色；图标取色模式会在开服时自动写入检测到的 #RRGGBB，也可手动设置。"),
@@ -289,7 +291,9 @@ final class RankBoardConfig {
         String host = web.getProperty("host", "").strip();
         if (host.isEmpty() || host.equals("0.0.0.0") || host.equals("::")) host = "127.0.0.1";
         if (host == null || host.isBlank()) host = "127.0.0.1";
-        return host + ":" + web.getProperty("port", "8765").strip();
+        String configuredPort = web.getProperty("port", "8765").strip();
+        int activePort = WebDashboard.activePort();
+        return host + ":" + (activePort > 0 ? activePort : configuredPort);
     }
 
     private static Properties loadMigratedProperties(MinecraftServer server, String fileName,
@@ -431,7 +435,7 @@ final class RankBoardConfig {
                     "client-scoreboard-show-zero", "scoreboard-switch-message-enabled",
                     "scoreboard-title-color-enabled",
                     "scoreboard-live-update-enabled", "avatar-cache-enabled", "mod-whitelist-enabled",
-                    "web-theme-follow-icon" -> normalizedBoolean(value);
+                    "web-theme-follow-icon", "web-switcher-op-hint-enabled", "web-port-fallback-enabled" -> normalizedBoolean(value);
             case "help-visibility" -> switch (value.toLowerCase(Locale.ROOT)) {
                 case "all" -> "all";
                 case "op", "ops" -> "op";

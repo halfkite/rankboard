@@ -490,7 +490,11 @@ public final class RankBoardMod implements ModInitializer {
                 if (op) helpCommand(source, "/leaderboard webtheme <icon|blue|rgb #RRGGBB|true|false|status>",
                         "/leaderboard webtheme ", "选择图标自动取色或默认蓝色网页主题");
                 if (op) helpCommand(source, "/leaderboard webswitch <name|weight|add|remove|list|status>",
-                        "/leaderboard webswitch ", "设置左侧服务器切换按钮名称、排序权重和其他网页地址");
+                        "/leaderboard webswitch ", "设置左上角服务器切换按钮名称、排序权重和其他网页地址");
+                if (op) helpCommand(source, "/leaderboard config set web-switcher-op-hint-enabled <true|false>",
+                        "/leaderboard config set web-switcher-op-hint-enabled ", "开关 OP 进服时的服务器切换名称提醒");
+                if (op) helpCommand(source, "/leaderboard config set web-port-fallback-enabled <true|false>",
+                        "/leaderboard config set web-port-fallback-enabled ", "端口被占用时启用共享网页端口中继，关闭后第二个服务器不会启动网页");
                 helpCommand(source, "/leaderboard config list|get|set|reload", "/leaderboard config ", "查看或修改配置");
                 helpCommand(source, "/leaderboard ratelimit clear", "/leaderboard ratelimit clear", "清除网页限流");
                 source.sendFeedback(() -> Text.literal(
@@ -548,6 +552,10 @@ public final class RankBoardMod implements ModInitializer {
                         "/leaderboard webtheme ", "选择图标自动取色或默认蓝色网页主题");
                 helpCommand(source, "/leaderboard webswitch <name|weight|add|remove|list|status>",
                         "/leaderboard webswitch ", "管理网页服务器切换列表；权重越小越靠前，1 最先显示");
+                helpCommand(source, "/leaderboard config set web-switcher-op-hint-enabled <true|false>",
+                        "/leaderboard config set web-switcher-op-hint-enabled ", "开关 OP 进服时的服务器切换名称提醒");
+                helpCommand(source, "/leaderboard config set web-port-fallback-enabled <true|false>",
+                        "/leaderboard config set web-port-fallback-enabled ", "端口被占用时启用共享网页端口中继，关闭后第二个服务器不会启动网页");
                 helpCommand(source, "/leaderboard ratelimit clear", "/leaderboard ratelimit clear", "立即清除全部网页限流记录");
                 helpCommand(source, "/leaderboard cache <status|reload>", "/leaderboard cache ",
                         "查看缓存状态；仅首次安装或缓存无效时自动扫描，reload 手动重新读取统计文件");
@@ -629,11 +637,13 @@ public final class RankBoardMod implements ModInitializer {
                 configHelpHeader(source);
                 configHelp(source, "host");
                  configHelp(source, "port");
+                 configHelp(source, "web-port-fallback-enabled");
                  configHelp(source, "server-name");
                  configHelp(source, "web-default-language");
                  configHelp(source, "web-switcher-name");
-                configHelp(source, "web-switcher-weight");
-                configHelp(source, "web-switcher-peers");
+                 configHelp(source, "web-switcher-weight");
+                 configHelp(source, "web-switcher-peers");
+                 configHelp(source, "web-switcher-op-hint-enabled");
                 configHelp(source, "website-icon");
                 configHelp(source, "web-data-requests-per-second");
                 configHelp(source, "web-icon-request-interval-seconds");
@@ -678,7 +688,9 @@ public final class RankBoardMod implements ModInitializer {
             case "history-files-per-second", "history-scan-threads", "mod-whitelist-enabled" ->
                     "；不会自动读取统计文件，需执行 /leaderboard cache reload";
             case "host", "port", "server-name", "website-icon", "web-data-requests-per-second",
-                    "web-icon-request-interval-seconds", "web-ranking-refresh-interval-seconds" ->
+                    "web-icon-request-interval-seconds", "web-ranking-refresh-interval-seconds",
+                    "web-switcher-name", "web-switcher-weight", "web-switcher-peers",
+                    "web-switcher-op-hint-enabled", "web-port-fallback-enabled" ->
                     "；修改后执行 /leaderboard config reload";
             default -> "；写入后立即生效";
         };
@@ -738,11 +750,12 @@ public final class RankBoardMod implements ModInitializer {
         }
 
         int visible = 0;
-        visible += sendMetricMenuRow(source, Metric.ELYTRA_DISTANCE, Metric.JUMPS, Metric.MINED, Metric.BEDROCK_BROKEN);
-        visible += sendMetricMenuRow(source, Metric.PLACED, Metric.BREEDING, Metric.FISHING, Metric.CRAFTED);
-        visible += sendMetricMenuRow(source, Metric.TRADES, Metric.PLAY_TIME, Metric.AFK_TIME, Metric.KILLS);
-        visible += sendMetricMenuRow(source, Metric.DEATHS, Metric.DAMAGE_TAKEN, Metric.DAMAGE_DEALT, Metric.PVP_KILLS);
-        visible += sendMetricMenuRow(source, Metric.PICKED_UP, Metric.DROPPED, Metric.FOOD, Metric.REDSTONE_PLACED);
+        visible += sendMetricMenuRow(source, Metric.PLAY_TIME, Metric.PLACED, Metric.MINED, Metric.DEATHS);
+        visible += sendMetricMenuRow(source, Metric.ELYTRA_DISTANCE, Metric.FOOD, Metric.JUMPS, Metric.KILLS);
+        visible += sendMetricMenuRow(source, Metric.DAMAGE_TAKEN, Metric.DAMAGE_DEALT, Metric.PVP_KILLS, Metric.BREEDING);
+        visible += sendMetricMenuRow(source, Metric.TRADES, Metric.FISHING, Metric.DROPPED, Metric.PICKED_UP);
+        visible += sendMetricMenuRow(source, Metric.CRAFTED, Metric.REDSTONE_PLACED, Metric.AFK_TIME);
+        visible += sendMetricMenuRow(source, Metric.BEDROCK_BROKEN);
         if (visible == 0) {
             String disabledMessage = localized(source, "menu.all_disabled");
             source.sendFeedback(() -> Text.literal(disabledMessage + "\n").formatted(Formatting.GRAY), false);
@@ -1105,6 +1118,19 @@ public final class RankBoardMod implements ModInitializer {
             player.sendMessage(Text.literal(RankBoardLanguage.text(player, "web_hint",
                     config.webAddress(PlayerCompat.server(player))))
                     .formatted(Formatting.AQUA), false);
+        }
+        if (CommandPermissionCompat.has(player.getCommandSource(), 2)
+                && Boolean.parseBoolean(RankBoardConfig.value("web-switcher-op-hint-enabled"))
+                && RankBoardConfig.value("web-switcher-name").equalsIgnoreCase("auto")
+                && WebDashboard.hasSwitcherPeers()) {
+            Text switcherHint = Text.literal(RankBoardLanguage.text(player, "web_switcher.op_hint",
+                            WebDashboard.switcherDisplayName())).formatted(Formatting.GRAY)
+                    .copy().append(Text.literal(" "))
+                    .append(Text.literal("[" + RankBoardLanguage.text(player, "web_switcher.set_name") + "]")
+                            .setStyle(TextCompat.suggest(Style.EMPTY.withColor(Formatting.AQUA),
+                                    "/leaderboard webswitch name ",
+                                    Text.literal("/leaderboard webswitch name <名称>"))));
+            player.sendMessage(switcherHint, false);
         }
         if (config.joinMenuEnabled
                 && LeaderboardState.get(PlayerCompat.server(player)).isJoinMenuEnabled(player.getUuid())) {
@@ -1828,26 +1854,26 @@ public final class RankBoardMod implements ModInitializer {
     }
 
     public enum Metric {
+        PLAY_TIME("playtime", "在线榜", Formatting.AQUA, p -> custom(p, Stats.PLAY_TIME)),
+        PLACED("placed", "放置榜", Formatting.DARK_AQUA, RankBoardMod::placed),
+        MINED("mined", "挖掘榜", Formatting.BLUE, RankBoardMod::mined),
+        DEATHS("deaths", "死亡榜", Formatting.DARK_RED, p -> custom(p, Stats.DEATHS)),
+        ELYTRA_DISTANCE("elytra", "飞行榜", Formatting.LIGHT_PURPLE, p -> custom(p, Stats.AVIATE_ONE_CM)),
         FOOD("food", "大胃王榜", Formatting.GOLD, RankBoardMod::foodUsed),
         JUMPS("jumps", "跳跃榜", Formatting.LIGHT_PURPLE, p -> custom(p, Stats.JUMP)),
-        MINED("mined", "挖掘榜", Formatting.BLUE, RankBoardMod::mined),
-        PLACED("placed", "放置榜", Formatting.DARK_AQUA, RankBoardMod::placed),
-        BREEDING("breeding", "繁殖榜", Formatting.DARK_AQUA, p -> custom(p, Stats.ANIMALS_BRED)),
-        BEDROCK_BROKEN("bedrock", "破基岩榜", Formatting.BLUE, RankBoardMod::bedrockBroken),
         KILLS("kills", "击杀榜", Formatting.RED, p -> custom(p, Stats.MOB_KILLS) + custom(p, Stats.PLAYER_KILLS)),
-        PVP_KILLS("pvp", "PvP榜", Formatting.DARK_RED, p -> custom(p, Stats.PLAYER_KILLS)),
-        DEATHS("deaths", "死亡榜", Formatting.DARK_RED, p -> custom(p, Stats.DEATHS)),
-        TRADES("trades", "交易榜", Formatting.GREEN, p -> custom(p, Stats.TRADED_WITH_VILLAGER)),
-        PLAY_TIME("playtime", "在线榜", Formatting.AQUA, p -> custom(p, Stats.PLAY_TIME)),
-        AFK_TIME("afk", "摸鱼榜", Formatting.AQUA, RankBoardMod::afkTime),
-        ELYTRA_DISTANCE("elytra", "飞行榜", Formatting.LIGHT_PURPLE, p -> custom(p, Stats.AVIATE_ONE_CM)),
-        FISHING("fishing", "钓鱼榜", Formatting.DARK_BLUE, p -> custom(p, Stats.FISH_CAUGHT)),
         DAMAGE_TAKEN("damage", "受伤榜", Formatting.RED, p -> custom(p, Stats.DAMAGE_TAKEN)),
         DAMAGE_DEALT("dealt", "输出榜", Formatting.GOLD, p -> custom(p, Stats.DAMAGE_DEALT)),
+        PVP_KILLS("pvp", "PvP榜", Formatting.DARK_RED, p -> custom(p, Stats.PLAYER_KILLS)),
+        BREEDING("breeding", "繁殖榜", Formatting.DARK_AQUA, p -> custom(p, Stats.ANIMALS_BRED)),
+        TRADES("trades", "交易榜", Formatting.GREEN, p -> custom(p, Stats.TRADED_WITH_VILLAGER)),
+        FISHING("fishing", "钓鱼榜", Formatting.DARK_BLUE, p -> custom(p, Stats.FISH_CAUGHT)),
         DROPPED("dropped", "丢垃圾榜", Formatting.DARK_GRAY, RankBoardMod::dropped),
         PICKED_UP("picked", "拾荒榜", Formatting.GREEN, RankBoardMod::pickedUp),
         CRAFTED("crafted", "合成榜", Formatting.GOLD, RankBoardMod::crafted),
-        REDSTONE_PLACED("redstone", "红石大蛇榜", Formatting.RED, RankBoardMod::redstonePlaced);
+        REDSTONE_PLACED("redstone", "红石大蛇榜", Formatting.RED, RankBoardMod::redstonePlaced),
+        AFK_TIME("afk", "摸鱼榜", Formatting.AQUA, RankBoardMod::afkTime),
+        BEDROCK_BROKEN("bedrock", "破基岩榜", Formatting.BLUE, RankBoardMod::bedrockBroken);
 
         final String command;
         final String label;

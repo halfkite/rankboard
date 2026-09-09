@@ -80,14 +80,10 @@ public final class RankBoardMod implements ModInitializer {
             StatReader.initialize(server);
             WebDashboard.start(server);
         });
-        ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
-            RuntimeMetricTracker.stop(server);
-            PlayerNameColors.clear(server);
-            BoardService.clearSessions();
-            WebDashboard.stop();
-            StatReader.stopWarmup();
-            LOOK_MENU_HELD.clear();
-        });
+        // QuickBackupMulti can start the restored server from inside SERVER_STOPPED.
+        // Clear all server-bound state one phase earlier so the new server cannot
+        // reuse stale rbp_/rbo_ objective/session references during its first join.
+        ServerLifecycleEvents.SERVER_STOPPING.register(this::cleanupServerState);
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             ServerPlayerEntity player = handler.getPlayer();
             // Keep the UUID-keyed statistic cache aligned with the player's current
@@ -117,6 +113,15 @@ public final class RankBoardMod implements ModInitializer {
                 BoardService.enforceForeignScoreboardPolicy(server);
             }
         });
+    }
+
+    private void cleanupServerState(net.minecraft.server.MinecraftServer server) {
+        RuntimeMetricTracker.stop(server);
+        PlayerNameColors.clear(server);
+        BoardService.clearSessions();
+        WebDashboard.stop();
+        StatReader.stopWarmup();
+        LOOK_MENU_HELD.clear();
     }
 
     private void registerCommands(com.mojang.brigadier.CommandDispatcher<ServerCommandSource> dispatcher,

@@ -413,7 +413,7 @@ GET /api/rankings?metric=playtime&from=2026-07-16&to=2026-07-20
 ## 存档数据
 
 - 榜单历史快照：`world/data/rankboard/`
-- 玩家头像缓存：`world/data/rankboard/avatars/`
+- 玩家头像缓存：`world/data/rankboard/avatars/`（玩家进服时写入；无 profile 纹理时使用头像服务回退）
 - 白名单文件：`config/rankboard/rankboard-whitelist.json`
 - 主配置：`config/rankboard/rankboard.properties`
 - 网页配置：`config/rankboard/rankboard-web.properties`
@@ -434,7 +434,7 @@ gradlew.bat build
 
 ## GitHub Actions 发布
 
-先在 GitHub 创建并发布 Release（标签建议使用 `1.10.1` 或 `v1.10.1`）。发布事件会触发两个相互独立的流程：
+先在 GitHub 创建并发布 Release（标签建议使用 `1.10.2` 或 `v1.10.2`）。发布事件会触发两个相互独立的流程：
 
 - `.github/workflows/release.yml` 只构建 Fabric。
 - `.github/workflows/release-neoforge.yml` 只构建 NeoForge。

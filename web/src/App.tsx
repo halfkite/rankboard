@@ -68,7 +68,7 @@ type Language = "zh" | "en";
 
 const UI_TEXT: Record<Language, Record<string, string>> = {
   zh: {
-    language: "中文", languageLabel: "语言", currentOnline: "当前在线", lastOnlineUnknown: "最后在线：未知", lastOnline: "最后在线",
+    language: "中文", languageLabel: "Language", currentOnline: "当前在线", lastOnlineUnknown: "最后在线：未知", lastOnline: "最后在线",
     total: "总和", query: "查询", all: "总榜", day: "最近一日", week: "最近一周", month: "最近一月", custom: "自定义日期",
     compact: "紧凑视图", tile: "平铺视图", detail: "详细视图", normal: "普通视图", layoutMode: "布局", switchServer: "服务器切换", current: "当前", switch: "切换", offline: "离线",
     statisticsPeriod: "统计周期", onlineOnly: "仅显示当前在线玩家", metricCategory: "榜单分类", downloadMod: "下载模组", sourceCode: "查看源码",
@@ -736,7 +736,7 @@ export default function App() {
             onClick={() => setLanguage((current) => current === "zh" ? "en" : "zh")}
             aria-label={text.language}
           >
-            {text.languageLabel}: {text.language}
+            {text.languageLabel}：{text.language}
           </button>
           <div className="view-switcher" role="group" aria-label={text.layoutMode}>
             {viewOptions.map(({ id, label, Icon }) => (

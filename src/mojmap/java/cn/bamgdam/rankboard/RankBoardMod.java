@@ -80,13 +80,11 @@ public final class RankBoardMod implements ModInitializer {
             StatReader.initialize(server);
             WebDashboard.start(server);
         });
-        ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
-            PlayerNameColors.clear(server);
-            BoardService.clearSessions();
-            WebDashboard.stop();
-            StatReader.stopWarmup();
-            LOOK_MENU_HELD.clear();
-        });
+        // Clear all per-server state before the old server is fully stopped.
+        // QuickBackupMulti may start a restored server from inside SERVER_STOPPED;
+        // cleaning only after that callback can leave stale objectives/sessions
+        // and make the restored server crash while rebuilding its boards.
+        ServerLifecycleEvents.SERVER_STOPPING.register(this::cleanupServerState);
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             ServerPlayer player = handler.getPlayer();
             // The statistic file and persistent cache are keyed by UUID, while the
@@ -736,6 +734,14 @@ public final class RankBoardMod implements ModInitializer {
                 + (followMetric ? "跟随当前榜单颜色" : "固定青色")
                 + " (carousel-color-follow-metric=" + followMetric + ")").withStyle(ChatFormatting.GRAY), false);
         return 1;
+    }
+
+    private void cleanupServerState(net.minecraft.server.MinecraftServer server) {
+        PlayerNameColors.clear(server);
+        BoardService.clearSessions();
+        WebDashboard.stop();
+        StatReader.stopWarmup();
+        LOOK_MENU_HELD.clear();
     }
 
     private int setWebThemeMode(CommandSourceStack source, boolean followIcon) {

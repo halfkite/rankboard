@@ -6,6 +6,7 @@ import com.google.gson.JsonParser;
 import com.mojang.authlib.properties.Property;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.storage.LevelResource;
 
 import javax.imageio.ImageIO;
 import java.awt.Graphics2D;
@@ -42,16 +43,19 @@ final class AvatarCache {
 
     static void cacheOnJoin(MinecraftServer server, ServerPlayer player) {
         if (!RankBoardConfig.get().avatarCacheEnabled) return;
-        String skinUrl = skinUrl(player);
-        if (skinUrl == null) return;
         UUID uuid = player.getUUID();
+        String resolvedSkinUrl = skinUrl(player);
+        boolean avatarService = resolvedSkinUrl == null;
+        if (avatarService) resolvedSkinUrl = "https://mc-heads.net/avatar/" + uuid + "/64";
+        final String downloadUrl = resolvedSkinUrl;
+        final boolean directAvatar = avatarService;
         Path target = path(server, uuid);
         if (isFresh(target)) return;
-        WORKER.submit(() -> downloadHead(skinUrl, target, uuid));
+        WORKER.submit(() -> downloadHead(downloadUrl, target, uuid, directAvatar));
     }
 
     static Path path(MinecraftServer server, UUID uuid) {
-        return RankBoardConfig.configDirectory(server).resolve("avatar-cache").resolve(uuid + ".png");
+        return server.getWorldPath(LevelResource.ROOT).resolve("data").resolve("rankboard").resolve("avatars").resolve(uuid + ".png");
     }
 
     private static boolean isFresh(Path path) {
@@ -80,7 +84,7 @@ final class AvatarCache {
         return null;
     }
 
-    private static void downloadHead(String url, Path target, UUID uuid) {
+    private static void downloadHead(String url, Path target, UUID uuid, boolean directAvatar) {
         Path temporary = target.resolveSibling(target.getFileName() + ".tmp");
         try {
             HttpRequest request = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(20))
@@ -89,12 +93,18 @@ final class AvatarCache {
             if (response.statusCode() != 200) throw new IOException("HTTP " + response.statusCode());
             BufferedImage skin;
             try (InputStream input = response.body()) { skin = ImageIO.read(input); }
-            if (skin == null || skin.getWidth() < 48 || skin.getHeight() < 16) throw new IOException("Invalid skin image");
+            if (skin == null || skin.getWidth() < 16 || skin.getHeight() < 16) throw new IOException("Invalid skin image");
             BufferedImage head = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);
             Graphics2D graphics = head.createGraphics();
             graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
-            graphics.drawImage(skin, 0, 0, 64, 64, 8, 8, 16, 16, null);
-            graphics.drawImage(skin, 0, 0, 64, 64, 40, 8, 48, 16, null);
+            if (directAvatar && skin.getWidth() >= 16 && skin.getHeight() >= 16) {
+                graphics.drawImage(skin, 0, 0, 64, 64, null);
+            } else if (skin.getWidth() >= 48 && skin.getHeight() >= 16) {
+                graphics.drawImage(skin, 0, 0, 64, 64, 8, 8, 16, 16, null);
+                graphics.drawImage(skin, 0, 0, 64, 64, 40, 8, 48, 16, null);
+            } else {
+                throw new IOException("Invalid skin image dimensions");
+            }
             graphics.dispose();
             Files.createDirectories(target.getParent());
             if (!ImageIO.write(head, "png", temporary.toFile())) throw new IOException("PNG writer unavailable");
@@ -105,5 +115,3 @@ final class AvatarCache {
         }
     }
 }
-
-

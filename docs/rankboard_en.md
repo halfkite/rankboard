@@ -413,7 +413,7 @@ Add RankBoard sites to the switcher with `/leaderboard webswitch add <IP|host|UR
 ## World Data
 
 - Leaderboard history snapshots: `world/data/rankboard/`
-- Player avatar cache: `world/data/rankboard/avatars/`
+- Player avatar cache: `world/data/rankboard/avatars/` (written when players join; falls back to the avatar service when profile textures are unavailable)
 - Whitelist file: `config/rankboard/rankboard-whitelist.json`
 - Main config: `config/rankboard/rankboard.properties`
 - Web config: `config/rankboard/rankboard-web.properties`
@@ -434,7 +434,7 @@ Multi-version results are collected under `multi-version-builds/`; every success
 
 ## GitHub Actions publishing
 
-Create and publish a GitHub Release first (a tag such as `1.10.1` or `v1.10.1` is recommended). The published event starts two independent workflows:
+Create and publish a GitHub Release first (a tag such as `1.10.2` or `v1.10.2` is recommended). The published event starts two independent workflows:
 
 - `.github/workflows/release.yml` builds Fabric only.
 - `.github/workflows/release-neoforge.yml` builds NeoForge only.

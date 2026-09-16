@@ -358,8 +358,10 @@ final class RankBoardLanguage {
             try (var reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
                 root = JsonParser.parseReader(reader).getAsJsonObject();
             } catch (RuntimeException exception) {
-                RankBoardMod.LOGGER.warn("Could not merge default values into invalid language pack {}", path);
-                return;
+                // An interrupted first-run write can leave an empty/truncated file.
+                // Recover it from the bundled defaults instead of crashing server startup.
+                RankBoardMod.LOGGER.warn("Resetting invalid language pack {} to bundled defaults", path);
+                root = new JsonObject();
             }
         } else {
             try (InputStream stream = RankBoardLanguage.class.getClassLoader()

@@ -54,6 +54,7 @@ final class RankBoardLanguage {
             Map.entry("查看排行榜", "View a leaderboard"), Map.entry("控制榜单轮播", "Control leaderboard carousel"),
             Map.entry("关闭个人计分板", "Close the personal scoreboard"),
             Map.entry("设置网站按钮地址，默认 127.0.0.1:8765", "Set the website button address; default 127.0.0.1:8765"),
+            Map.entry("开启或关闭网页服务；游戏内修改立即生效，手动编辑后执行配置重载", "Enable or disable the web service; in-game changes apply immediately, while manual edits require a config reload"),
             Map.entry("管理统计缓存", "Manage the statistics cache"),
             Map.entry("管理模组白名单", "Manage the RankBoard whitelist"),
             Map.entry("控制白名单筛选", "Control whitelist filtering"),
@@ -126,7 +127,12 @@ final class RankBoardLanguage {
         if (Files.isRegularFile(path)) {
             try (var reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
                 root = JsonParser.parseReader(reader).getAsJsonObject();
-            } catch (RuntimeException ignored) { return; }
+            } catch (RuntimeException ignored) {
+                // An interrupted first-run write can leave an empty/truncated file.
+                // Recover it from the bundled defaults instead of crashing server startup.
+                RankBoardMod.LOGGER.warn("Resetting invalid language pack {} to bundled defaults", path);
+                root = new JsonObject();
+            }
         } else {
             try (InputStream stream = RankBoardLanguage.class.getClassLoader().getResourceAsStream("assets/rankboard/lang/" + path.getFileName())) {
                 if (stream != null) root = JsonParser.parseReader(new InputStreamReader(stream, StandardCharsets.UTF_8)).getAsJsonObject();

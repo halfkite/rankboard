@@ -431,9 +431,11 @@ public final class RankBoardMod implements ModInitializer {
             case "web" -> {
                 helpCommand(source, "/leaderboard config list|get|set|reload", "/leaderboard config ", "查看或修改配置");
                 helpCommand(source, "/leaderboard ratelimit clear", "/leaderboard ratelimit clear", "清除网页限流");
-                if (RankBoardConfig.get().websiteButtonEnabled) {
+                if (RankBoardConfig.get().websiteButtonEnabled && WebDashboard.isEnabled()) {
                     source.sendSuccess(() -> websiteButton(source), false);
                 }
+                if (op) helpCommand(source, "/leaderboard config set web-enabled <true|false>",
+                        "/leaderboard config set web-enabled ", "开启或关闭网页服务；游戏内修改立即生效，手动编辑后执行配置重载");
                 helpCommand(source, "/leaderboard config set web-public-address <地址|auto>", "/leaderboard config set web-public-address ", "设置网站按钮打开的地址，默认 127.0.0.1:8765");
                 if (op) helpCommand(source, "/leaderboard config set web-default-language <zh_cn|en_us|auto>",
                         "/leaderboard config set web-default-language ", "设置网页默认语言");
@@ -592,7 +594,7 @@ public final class RankBoardMod implements ModInitializer {
                     "/leaderboard carousel on", "自动轮播当前周期的榜单"));
             hasSecondRowButton = true;
         }
-        if (RankBoardConfig.get().websiteButtonEnabled) {
+        if (RankBoardConfig.get().websiteButtonEnabled && WebDashboard.isEnabled()) {
             if (hasSecondRowButton) secondRow = secondRow.copy().append(Component.literal(" "));
             secondRow = secondRow.copy().append(websiteButton(source));
             hasSecondRowButton = true;
@@ -922,7 +924,7 @@ public final class RankBoardMod implements ModInitializer {
             player.sendSystemMessage(Component.literal(RankBoardLanguage.text(player, "welcome",
                     config.displayName(PlayerCompat.server(player)))).withStyle(ChatFormatting.GRAY), false);
         }
-        if (config.joinWebHintEnabled) {
+        if (config.joinWebHintEnabled && WebDashboard.isEnabled()) {
             player.sendSystemMessage(Component.literal(RankBoardLanguage.text(player, "web_hint",
                     config.webAddress(PlayerCompat.server(player)))).withStyle(ChatFormatting.AQUA), false);
         }

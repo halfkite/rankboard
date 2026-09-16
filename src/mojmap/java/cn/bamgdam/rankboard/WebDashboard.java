@@ -56,6 +56,7 @@ final class WebDashboard {
     private static int iconRequestIntervalSeconds = 3;
     private static int rankingRefreshIntervalSeconds = 30;
     private static int webPort = 8765;
+    private static boolean webEnabled = true;
     private static String switcherName = "Minecraft Server";
     private static int switcherWeight = 100;
     private static List<String> switcherPeers = List.of();
@@ -88,6 +89,11 @@ final class WebDashboard {
             String host = config.getProperty("host", "0.0.0.0");
             int port = Integer.parseInt(config.getProperty("port", "8765"));
             webPort = port;
+            webEnabled = Boolean.parseBoolean(config.getProperty("web-enabled", "true"));
+            if (!webEnabled) {
+                RankBoardMod.LOGGER.info("RankBoard web dashboard is disabled by configuration (web-enabled=false)");
+                return;
+            }
             dataRequestsPerSecond = Integer.parseInt(config.getProperty("web-data-requests-per-second", "1"));
             iconRequestIntervalSeconds = Integer.parseInt(config.getProperty("web-icon-request-interval-seconds", "3"));
             rankingRefreshIntervalSeconds = Integer.parseInt(config.getProperty("web-ranking-refresh-interval-seconds", "30"));
@@ -128,6 +134,7 @@ final class WebDashboard {
     static synchronized void stop() {
         if (http != null) http.stop(1);
         http = null;
+        webEnabled = true;
         minecraft = null;
         websiteIcon = null;
         websiteIconBytes = null;
@@ -146,10 +153,13 @@ final class WebDashboard {
     static synchronized boolean restart(MinecraftServer server) {
         stop();
         start(server);
-        return http != null;
+        return !webEnabled || http != null;
     }
 
     static void invalidateRankings() { RANKING_CACHE.clear(); }
+
+    /** Whether the dashboard is enabled in rankboard-web.properties. */
+    static boolean isEnabled() { return webEnabled; }
 
     static int clearRateLimits() {
         int cleared = REQUEST_WINDOWS.size() + BURST_PENALTIES.size();

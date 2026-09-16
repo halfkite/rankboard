@@ -89,6 +89,7 @@ final class RankBoardConfig {
             option("help-visibility", "all", FileKind.MAIN, "权限与帮助", "帮助可见范围；默认 all，可选 all、op、hidden。"),
             option("avatar-cache-enabled", "true", FileKind.MAIN, "玩家头像缓存", "是否缓存进服玩家的皮肤头像；默认 true。"),
             option("avatar-cache-days", "7", FileKind.MAIN, "玩家头像缓存", "头像缓存有效天数；默认 7，范围 1-365。"),
+            option("web-enabled", "true", FileKind.WEB, "网页监听", "网页服务总开关；false 时不启动网页监听，也不会占用网页端口；默认 true。"),
             option("host", "0.0.0.0", FileKind.WEB, "网页监听", "网页监听地址；默认 0.0.0.0，表示监听所有 IPv4 地址。"),
             option("port", "8765", FileKind.WEB, "网页监听", "网页监听端口；默认 8765，范围 1-65535。"),
             option("web-data-requests-per-second", "1", FileKind.WEB, "请求限流", "数据接口基础请求间隔；值 1 表示每秒最多 1 次。30 秒内超过 30 次后，固定 30 分钟改为每 5 秒 1 次。"),
@@ -423,7 +424,7 @@ final class RankBoardConfig {
                     "client-scoreboard-show-zero", "scoreboard-switch-message-enabled",
                     "scoreboard-title-color-enabled",
                     "scoreboard-live-update-enabled", "avatar-cache-enabled", "mod-whitelist-enabled",
-                    "web-theme-follow-icon" -> normalizedBoolean(value);
+                    "web-enabled", "web-theme-follow-icon" -> normalizedBoolean(value);
             case "help-visibility" -> switch (value.toLowerCase(Locale.ROOT)) {
                 case "all" -> "all";
                 case "op", "ops" -> "op";

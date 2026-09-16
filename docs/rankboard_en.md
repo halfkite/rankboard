@@ -434,7 +434,7 @@ Multi-version results are collected under `multi-version-builds/`; every success
 
 ## GitHub Actions publishing
 
-Create and publish a GitHub Release first (a tag such as `1.10.2` or `v1.10.2` is recommended). The published event starts two independent workflows:
+Create and publish a GitHub Release first (a tag such as `1.10.3` or `v1.10.3` is recommended). The published event starts two independent workflows:
 
 - `.github/workflows/release.yml` builds Fabric only.
 - `.github/workflows/release-neoforge.yml` builds NeoForge only.

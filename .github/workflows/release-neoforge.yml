@@ -36,6 +36,8 @@ concurrency:
 
 jobs:
   inspect:
+    # Fabric releases use the fabric- prefix so the two loader pipelines stay isolated.
+    if: ${{ github.event_name == 'workflow_dispatch' || !startsWith(github.event.release.tag_name, 'fabric-') }}
     name: Inspect published Release
     runs-on: ubuntu-latest
     outputs:
@@ -231,7 +233,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.inspect.outputs.tag }}
-        run: gh release upload "$RELEASE_TAG" release/*.jar release/*.sha256 --repo "$GITHUB_REPOSITORY" --clobber
+        run: gh release upload "$RELEASE_TAG" release/*.jar --repo "$GITHUB_REPOSITORY" --clobber
 
       - name: Publish NeoForge to Modrinth
         if: ${{ (needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), format(',{0},', matrix.target))) && (needs.inspect.outputs.destinations == 'all' || needs.inspect.outputs.destinations == 'modrinth') }}
@@ -245,7 +247,7 @@ jobs:
           game-versions: ${{ matrix.game_version }}
           environment: server
           changelog: |
-            完善多语言
+            修复 QuickBackupMulti 回档后重复创建计分板导致的崩溃；优化网页布局，支持同端口多实例切换服务器排行榜
           modrinth-id: ${{ vars.MODRINTH_NEOFORGE_PROJECT_ID || vars.MODRINTH_PROJECT_ID || 'TcDzE8EJ' }}
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           retry-attempts: 3
@@ -263,7 +265,7 @@ jobs:
           game-versions: ${{ matrix.game_version }}
           environment: server
           changelog: |
-            完善多语言
+            修复 QuickBackupMulti 回档后重复创建计分板导致的崩溃；优化网页布局，支持同端口多实例切换服务器排行榜
           curseforge-id: ${{ vars.CURSEFORGE_NEOFORGE_PROJECT_ID || vars.CURSEFORGE_PROJECT_ID || '1663124' }}
           curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
           retry-attempts: 3

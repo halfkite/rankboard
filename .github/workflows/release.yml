@@ -113,6 +113,8 @@ jobs:
             java: '25'
           - target: 26.2
             java: '25'
+          - target: 26.3
+            java: '25'
     steps:
       - name: Check out Release source
         uses: actions/checkout@v4
@@ -160,6 +162,7 @@ jobs:
           ./gradlew clean build --no-daemon \
             -Dorg.gradle.java.home="$JAVA_HOME" \
             -Pminecraft_version=26.2 \
+            -Ploom_custom_metadata=https://piston-meta.mojang.com/v1/packages/2ee1d19a4f344bcc84c0499ba332b98f6441e6ff/26.2.json \
             -Pmapping_type=none \
             -Ploader_version=0.19.3 \
             -Pfabric_version=0.157.0+26.2 \
@@ -168,6 +171,25 @@ jobs:
           artifact="$(find build/libs -maxdepth 1 -type f -name 'rankboard-*.jar' ! -name '*-sources.jar' | head -n 1)"
           test -n "$artifact"
           output="release/rankboard-${VERSION}+fabric+mc26.2.jar"
+          mv "$artifact" "$output"
+
+      - name: Build 26.3 artifact
+        if: ${{ matrix.target == '26.3' && (needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), format(',{0},', matrix.target))) }}
+        shell: bash
+        env:
+          VERSION: ${{ needs.inspect.outputs.version }}
+        run: |
+          ./gradlew clean build --no-daemon \
+            -Dorg.gradle.java.home="$JAVA_HOME" \
+            -Pminecraft_version=26.3 \
+            -Pmapping_type=none \
+            -Ploader_version=0.19.5 \
+            -Pfabric_version=0.160.5+26.3 \
+            -Pmod_version="$VERSION"
+          mkdir -p release
+          artifact="$(find build/libs -maxdepth 1 -type f -name 'rankboard-*.jar' ! -name '*-sources.jar' | head -n 1)"
+          test -n "$artifact"
+          output="release/rankboard-${VERSION}+fabric+mc26.3.jar"
           mv "$artifact" "$output"
 
       - name: Normalize artifact name and create checksum
@@ -223,6 +245,8 @@ jobs:
               26.1.2
           - target: 26.2
             game_versions: 26.2
+          - target: 26.3
+            game_versions: 26.3
     steps:
       - name: Download Fabric build artifact
         if: ${{ needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), format(',{0},', matrix.target)) }}
@@ -237,7 +261,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.inspect.outputs.tag }}
-        run: gh release upload "$RELEASE_TAG" release/*.jar release/*.sha256 --repo "$GITHUB_REPOSITORY" --clobber
+        run: gh release upload "$RELEASE_TAG" release/*.jar --repo "$GITHUB_REPOSITORY" --clobber
 
       - name: Publish Fabric to Modrinth
         if: ${{ (needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), format(',{0},', matrix.target))) && (needs.inspect.outputs.destinations == 'all' || needs.inspect.outputs.destinations == 'modrinth') }}
@@ -251,7 +275,7 @@ jobs:
           game-versions: ${{ matrix.game_versions }}
           environment: server
           changelog: |
-            完善多语言
+            修复 QuickBackupMulti 回档后重复创建计分板导致的崩溃；优化网页布局，支持同端口多实例切换服务器排行榜
           modrinth-id: ${{ vars.MODRINTH_PROJECT_ID || 'TcDzE8EJ' }}
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           retry-attempts: 3
@@ -269,7 +293,7 @@ jobs:
           game-versions: ${{ matrix.game_versions }}
           environment: server
           changelog: |
-            完善多语言
+            修复 QuickBackupMulti 回档后重复创建计分板导致的崩溃；优化网页布局，支持同端口多实例切换服务器排行榜
           curseforge-id: ${{ vars.CURSEFORGE_PROJECT_ID || '1663124' }}
           curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
           retry-attempts: 3

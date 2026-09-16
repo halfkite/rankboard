@@ -61,6 +61,7 @@ final class WebDashboard {
     /** Stable only for this running JVM; used to route same-port local dashboards. */
     private static String instanceId = UUID.randomUUID().toString();
     private static boolean internalRelayPort;
+    private static boolean webEnabled = true;
     private static String webDefaultLanguage = "zh_cn";
     private static String switcherName = "Minecraft Server";
     private static int switcherWeight = 100;
@@ -96,6 +97,11 @@ final class WebDashboard {
             configuredWebPort = port;
             webPort = port;
             internalRelayPort = false;
+            webEnabled = Boolean.parseBoolean(config.getProperty("web-enabled", "true"));
+            if (!webEnabled) {
+                RankBoardMod.LOGGER.info("RankBoard web dashboard is disabled by configuration (web-enabled=false)");
+                return;
+            }
             dataRequestsPerSecond = Integer.parseInt(config.getProperty("web-data-requests-per-second", "1"));
             iconRequestIntervalSeconds = Integer.parseInt(config.getProperty("web-icon-request-interval-seconds", "3"));
             rankingRefreshIntervalSeconds = Integer.parseInt(config.getProperty("web-ranking-refresh-interval-seconds", "30"));
@@ -175,6 +181,7 @@ final class WebDashboard {
         registryFile = null;
         http = null;
         internalRelayPort = false;
+        webEnabled = true;
         minecraft = null;
         websiteIcon = null;
         websiteIconBytes = null;
@@ -192,7 +199,7 @@ final class WebDashboard {
     static synchronized boolean restart(MinecraftServer server) {
         stop();
         start(server);
-        return http != null;
+        return !webEnabled || http != null;
     }
 
     static void invalidateRankings() { RANKING_CACHE.clear(); }
@@ -213,6 +220,9 @@ final class WebDashboard {
 
     /** Returns the actual listening port, or zero before the dashboard starts. */
     static int activePort() { return http == null ? 0 : webPort; }
+
+    /** Whether the dashboard is enabled in rankboard-web.properties. */
+    static boolean isEnabled() { return webEnabled; }
 
     /** Returns the port requested in rankboard-web.properties. */
     static int configuredPort() { return configuredWebPort; }

@@ -485,9 +485,11 @@ public final class RankBoardMod implements ModInitializer {
                 }
             }
             case "web" -> {
-                if (RankBoardConfig.get().websiteButtonEnabled) {
+                if (RankBoardConfig.get().websiteButtonEnabled && WebDashboard.isEnabled()) {
                     source.sendFeedback(() -> websiteButton(source), false);
                 }
+                if (op) helpCommand(source, "/leaderboard config set web-enabled <true|false>",
+                        "/leaderboard config set web-enabled ", "开启或关闭网页服务；游戏内修改立即生效，手动编辑后执行配置重载");
                 helpCommand(source, "/leaderboard config set web-public-address <地址|auto>",
                         "/leaderboard config set web-public-address ", "设置网站按钮地址，默认 127.0.0.1:8765");
                 helpCommand(source, "/leaderboard config set website-button-enabled <true|false>",
@@ -546,9 +548,11 @@ public final class RankBoardMod implements ModInitializer {
             }
             case "admin-web" -> {
                 if (!op) return 0;
-                if (RankBoardConfig.get().websiteButtonEnabled) {
+                if (RankBoardConfig.get().websiteButtonEnabled && WebDashboard.isEnabled()) {
                     source.sendFeedback(() -> websiteButton(source), false);
                 }
+                helpCommand(source, "/leaderboard config set web-enabled <true|false>",
+                        "/leaderboard config set web-enabled ", "开启或关闭网页服务；游戏内修改立即生效，手动编辑后执行配置重载");
                 helpCommand(source, "/leaderboard config set web-public-address <地址|auto>",
                         "/leaderboard config set web-public-address ", "设置网站按钮地址；重启网页服务后仍保留");
                 helpCommand(source, "/leaderboard config set website-button-enabled <true|false>",
@@ -640,6 +644,7 @@ public final class RankBoardMod implements ModInitializer {
             case "config-web" -> {
                 if (!op) return 0;
                 configHelpHeader(source);
+                configHelp(source, "web-enabled");
                 configHelp(source, "host");
                  configHelp(source, "port");
                  configHelp(source, "web-port-fallback-enabled");
@@ -695,7 +700,7 @@ public final class RankBoardMod implements ModInitializer {
             case "host", "port", "server-name", "website-icon", "web-data-requests-per-second",
                     "web-icon-request-interval-seconds", "web-ranking-refresh-interval-seconds",
                     "web-switcher-name", "web-switcher-weight", "web-switcher-peers",
-                    "web-switcher-op-hint-enabled", "web-port-fallback-enabled" ->
+                    "web-switcher-op-hint-enabled", "web-port-fallback-enabled", "web-enabled" ->
                     "；修改后执行 /leaderboard config reload";
             default -> "；写入后立即生效";
         };
@@ -735,7 +740,7 @@ public final class RankBoardMod implements ModInitializer {
                     "[" + localized(source, "menu.carousel") + "]", Formatting.AQUA, "/leaderboard carousel on", localized(source, "menu.tooltip.carousel")));
             hasSecondRowButton = true;
         }
-        if (RankBoardConfig.get().websiteButtonEnabled) {
+        if (RankBoardConfig.get().websiteButtonEnabled && WebDashboard.isEnabled()) {
             if (hasSecondRowButton) secondRow = secondRow.copy().append(Text.literal(" "));
             secondRow = secondRow.copy().append(websiteButton(source));
             hasSecondRowButton = true;
@@ -1119,7 +1124,7 @@ public final class RankBoardMod implements ModInitializer {
                     config.displayName(PlayerCompat.server(player)))).formatted(Formatting.GRAY)
                     , false);
         }
-        if (config.joinWebHintEnabled) {
+        if (config.joinWebHintEnabled && WebDashboard.isEnabled()) {
             player.sendMessage(Text.literal(RankBoardLanguage.text(player, "web_hint",
                     config.webAddress(PlayerCompat.server(player))))
                     .formatted(Formatting.AQUA), false);

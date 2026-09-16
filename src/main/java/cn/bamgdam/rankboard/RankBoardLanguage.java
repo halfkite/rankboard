@@ -240,6 +240,7 @@ final class RankBoardLanguage {
             Map.entry("设置网站按钮地址，默认 127.0.0.1:8765", "Set the website button address; default is 127.0.0.1:8765"),
             Map.entry("显示或隐藏菜单和帮助中的网站按钮", "Show or hide the website button in the menu and Help"),
             Map.entry("选择图标自动取色或默认蓝色网页主题", "Use icon-derived colors or the default blue web theme"),
+            Map.entry("开启或关闭网页服务；游戏内修改立即生效，手动编辑后执行配置重载", "Enable or disable the web service; in-game changes apply immediately, while manual edits require a config reload"),
             Map.entry("设置左上角服务器切换按钮名称、排序权重和其他网页地址", "Set the top-left server switcher name, sort weight, and peer web addresses"),
             Map.entry("设置左侧服务器切换按钮名称、排序权重和其他网页地址", "Set server switcher name, sort weight, and peer web addresses"),
             Map.entry("开关 OP 进服时的服务器切换名称提醒", "Enable or disable the operator join reminder for the server switcher name"),

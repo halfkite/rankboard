@@ -439,4 +439,4 @@ gradlew.bat build
 - `.github/workflows/release.yml` 只构建 Fabric。
 - `.github/workflows/release-neoforge.yml` 只构建 NeoForge。
 
-两个流程分别上传自己的 JAR 和 SHA-256 文件，并分别发布到 Modrinth 与 CurseForge。需要补发已有版本时，在对应流程选择 **Run workflow**，填写 Release 标签、发布目标和可选的版本筛选；Fabric 使用 `1.21.x`、`26.1.x`、`26.2`、`26.3`，NeoForge 使用 `1.21.1`、`26.1.2` 等具体目标。仓库需要配置 `MODRINTH_TOKEN`、`CURSEFORGE_TOKEN`；项目 ID 可用 Repository Variables 覆盖。
+两个流程分别上传自己的 JAR 和 SHA-256 文件，并分别发布到 Modrinth 与 CurseForge。需要补发已有版本时，在对应流程选择 **Run workflow**，填写 Release 标签、发布目标和可选的版本筛选；Fabric 使用 `1.21.x`、`26.1.x`、`26.2`、`26.3`，NeoForge 使用 `1.21.1`、`26.1.2`、`26.3` 等具体目标。仓库需要配置 `MODRINTH_TOKEN`、`CURSEFORGE_TOKEN`；项目 ID 可用 Repository Variables 覆盖。

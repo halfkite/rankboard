@@ -21,6 +21,7 @@ RankBoard 是服务端排行榜模组。它读取原版统计数据，提供聊�
 | 1.21–1.21.11 | `1.21.x` Wrapper | 视发布包而定 | Fabric Wrapper 会选择内置的兼容实现。 |
 | 26.1、26.1.1、26.1.2 | `26.1.x` Wrapper | 支持 | 26.x 需要 Java 25。 |
 | 26.2 | 独立 JAR | 支持 | 请不要和 26.1.x 包混用。 |
+| 26.3 | 独立 JAR | 支持（NeoForge 26.3.0.1-beta） | 26.x 需要 Java 25。 |
 
 > 一个服务端只安装一个 RankBoard JAR。移除旧的 `rankboard_wrapper` 或不匹配 Minecraft 版本的旧 JAR，避免加载到错误实现。
 

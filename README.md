@@ -25,7 +25,7 @@
 | Fabric | 26.2 | 维护中 | 1.10.2 |
 | Fabric | 26.3 | 维护中 | 1.10.2 |
 | NeoForge | 1.21.1、1.21.4、1.21.8、1.21.11 | 维护中 | 1.10.2 |
-| NeoForge | 26.1、26.1.1、26.1.2、26.2 | 维护中 | 1.10.2 |
+| NeoForge | 26.1、26.1.1、26.1.2、26.2、26.3 | 维护中 | 1.10.2 |
 
 ## 文档
 
@@ -95,7 +95,7 @@ gradlew.bat build
 发布流程仿照 Carpet-FGA-Addition：先在 GitHub 创建并发布一个 Release（标签建议使用 `1.10.2` 或 `v1.10.2`），随后 Actions 会从该标签构建并上传产物。Fabric 与 NeoForge 是两个独立的工作流和发布任务：
 
 - `.github/workflows/release.yml`：只构建和发布 Fabric（1.21.x、26.1.x、26.2、26.3）。
-- `.github/workflows/release-neoforge.yml`：只构建和发布 NeoForge（各个 1.21.x、26.1.x 与 26.2 小版本）。
+- `.github/workflows/release-neoforge.yml`：只构建和发布 NeoForge（各个 1.21.x、26.1.x、26.2 与 26.3）。
 
 两个工作流都将自己的 JAR 和校验文件上传到现有 GitHub Release，并分别发布到 Modrinth、CurseForge。需要修复某个已有 Release 时，可在对应工作流选择 **Run workflow**，填写 Release 标签、发布目标和版本筛选。
 
@@ -163,7 +163,7 @@ Artifacts are written to `build/libs/`.
 The release flow follows Carpet-FGA-Addition: create and publish a GitHub Release first (a tag such as `1.10.2` or `v1.10.2` is recommended). Actions then build from that tag. Fabric and NeoForge are intentionally separate:
 
 - `.github/workflows/release.yml` builds and publishes Fabric only (1.21.x, 26.1.x, 26.2, and 26.3).
-- `.github/workflows/release-neoforge.yml` builds and publishes NeoForge only (the supported 1.21.x, 26.1.x, and 26.2 versions).
+- `.github/workflows/release-neoforge.yml` builds and publishes NeoForge only (the supported 1.21.x, 26.1.x, 26.2, and 26.3 versions).
 
 Each workflow uploads only its own JARs and checksums to the existing GitHub Release, then publishes that loader to Modrinth and CurseForge. To repair an existing Release, use **Actions → Run workflow** in the corresponding workflow and enter the Release tag, destinations, and optional version filter.
 

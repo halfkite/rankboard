@@ -21,6 +21,7 @@ RankBoard is a server-side leaderboard mod. It reads vanilla statistics and prov
 | 1.21–1.21.11 | `1.21.x` wrapper | Depends on the release bundle | The Fabric wrapper selects a bundled compatible implementation. |
 | 26.1, 26.1.1, 26.1.2 | `26.1.x` wrapper | Supported | Java 25 is required. |
 | 26.2 | Separate JAR | Supported | Do not mix it with the 26.1.x package. |
+| 26.3 | Separate JAR | Supported (NeoForge 26.3.0.1-beta) | Java 25 is required. |
 
 > Install exactly one RankBoard JAR per server. Remove legacy `rankboard_wrapper` files and JARs built for a different Minecraft version to avoid loading the wrong implementation.
 

@@ -139,6 +139,10 @@ jobs:
             minecraft: 26.2
             neo_version: 26.2.0.41-beta
             java: '25'
+          - target: 26.3
+            minecraft: 26.3
+            neo_version: 26.3.0.1-beta
+            java: '25'
     steps:
       - name: Check out Release source
         uses: actions/checkout@v4
@@ -175,6 +179,7 @@ jobs:
           ./gradlew -p neoforge clean build --no-daemon --console=plain \
             -Dorg.gradle.java.home="$JAVA_HOME" \
             -Pminecraft_version="$MINECRAFT" \
+            -Pminecraft_version_range="[$MINECRAFT]" \
             -Pneo_version="$NEO_VERSION" \
             -Pmod_version="$VERSION"
           mkdir -p release
@@ -219,6 +224,8 @@ jobs:
             game_version: 26.1.2
           - target: 26.2
             game_version: 26.2
+          - target: 26.3
+            game_version: 26.3
     steps:
       - name: Download NeoForge build artifact
         if: ${{ needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), format(',{0},', matrix.target)) }}

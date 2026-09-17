@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $neoForgeDirectory = Join-Path $repoRoot 'neoforge'
 if ([string]::IsNullOrWhiteSpace($UniversalJar)) {
-    $UniversalJar = Join-Path $neoForgeDirectory 'build/libs/rankboard-1.10.4+neoforge+mc1.21.x-universal.jar'
+    $UniversalJar = Join-Path $neoForgeDirectory 'build/libs/rankboard-1.10.4+neoforge+mc1.21.jar'
 }
 
 $versions = @(

@@ -20,12 +20,13 @@
 
 | 加载器 | 游戏版本 | 状态 | 最新 RankBoard |
 | --- | --- | --- | --- |
-| Fabric | 1.21–1.21.11 | 维护中 | 1.10.3 |
-| Fabric | 26.1、26.1.1、26.1.2 | 维护中 | 1.10.3 |
-| Fabric | 26.2 | 维护中 | 1.10.3 |
-| Fabric | 26.3 | 维护中 | 1.10.3 |
-| NeoForge | 1.21.1、1.21.4、1.21.8、1.21.11 | 维护中 | 1.10.3 |
-| NeoForge | 26.1、26.1.1、26.1.2、26.2、26.3 | 维护中 | 1.10.3 |
+| Fabric | 1.21–1.21.11 | 维护中 | 1.10.4 |
+| Fabric | 26.1、26.1.1、26.1.2 | 维护中 | 1.10.4 |
+| Fabric | 26.2 | 维护中 | 1.10.4 |
+| Fabric | 26.3 | 维护中 | 1.10.4 |
+| NeoForge | 1.21.x | 维护中（一个通用 JAR，启动时自动选择小版本实现） | 1.10.4 |
+| NeoForge | 26.1.x | 维护中（一个通用 JAR，启动时自动选择小版本实现） | 1.10.4 |
+| NeoForge | 26.2、26.3 | 维护中 | 1.10.4 |
 
 ## 文档
 
@@ -46,7 +47,7 @@
 
 RankBoard 是一个服务端排行榜模组，支持 Fabric 和 NeoForge。玩家不需要客户端模组即可使用原版计分板和网页查看排行榜。
 
-当前版本：`1.10.3`　|　[完整中文文档](docs/rankboard.md)　|　[English documentation](docs/rankboard_en.md)
+当前版本：`1.10.4`　|　[完整中文文档](docs/rankboard.md)　|　[English documentation](docs/rankboard_en.md)
 
 ### 功能简介
 
@@ -63,7 +64,8 @@ RankBoard 是一个服务端排行榜模组，支持 Fabric 和 NeoForge。玩�
 
 **NeoForge：**
 1. 安装对应 Minecraft 版本的 NeoForge。
-2. 将 JAR 放入服务器 `mods/` 目录。
+2. 1.21.x 使用 `rankboard-1.10.4+neoforge+mc1.21.x-universal.jar`；26.1.x 使用 `rankboard-1.10.4+neoforge+mc26.1.x-universal.jar`；其他 26.x 使用对应版本 JAR。
+3. 将 JAR 放入服务器 `mods/` 目录。
 
 启动服务器一次生成 `config/rankboard/` 配置目录，修改配置后重启或使用 `/leaderboard config reload`。
 
@@ -90,12 +92,22 @@ gradlew.bat build
 
 构建产物位于 `build/libs/`。
 
+需要手动构建 NeoForge 1.21.x 通用 JAR 时，在 PowerShell 执行：
+
+```text
+powershell -ExecutionPolicy Bypass -File scripts/build-universal-neoforge-1.21.ps1 -OutputDirectory release -ModVersion 1.10.4
+python scripts/package_universal_neoforge.py release/variants release/rankboard-1.10.4+neoforge+mc1.21.x-universal.jar
+
+powershell -ExecutionPolicy Bypass -File scripts/build-universal-neoforge-26.1.ps1 -OutputDirectory release -ModVersion 1.10.4
+python scripts/package_universal_neoforge.py --family 26.1 release/variants release/rankboard-1.10.4+neoforge+mc26.1.x-universal.jar
+```
+
 ### GitHub Actions 发布
 
-发布流程仿照 Carpet-FGA-Addition：先在 GitHub 创建并发布一个 Release（标签建议使用 `1.10.3` 或 `v1.10.3`），随后 Actions 会从该标签构建并上传产物。Fabric 与 NeoForge 是两个独立的工作流和发布任务：
+发布流程仿照 Carpet-FGA-Addition：先在 GitHub 创建并发布一个 Release（标签建议使用 `1.10.4` 或 `v1.10.4`），随后 Actions 会从该标签构建并上传产物。Fabric 与 NeoForge 是两个独立的工作流和发布任务：
 
 - `.github/workflows/release.yml`：只构建和发布 Fabric（1.21.x、26.1.x、26.2、26.3）。
-- `.github/workflows/release-neoforge.yml`：只构建和发布 NeoForge（各个 1.21.x、26.1.x、26.2 与 26.3）。
+- `.github/workflows/release-neoforge.yml`：构建并发布 NeoForge；1.21.x 和 26.1.x 各提供一个通用 JAR，26.2 与 26.3 继续按版本构建。
 
 两个工作流都将自己的 JAR 和校验文件上传到现有 GitHub Release，并分别发布到 Modrinth、CurseForge。需要修复某个已有 Release 时，可在对应工作流选择 **Run workflow**，填写 Release 标签、发布目标和版本筛选。
 
@@ -114,7 +126,7 @@ GitHub Release 使用工作流自带的 `GITHUB_TOKEN`。令牌不会写入源�
 
 RankBoard is a server-side leaderboard mod supporting Fabric and NeoForge. Players do not need a client-side mod to use the vanilla sidebar or the web dashboard.
 
-Current version: `1.10.3`　|　[中文文档](docs/rankboard.md)　|　[English documentation](docs/rankboard_en.md)
+Current version: `1.10.4`　|　[中文文档](docs/rankboard.md)　|　[English documentation](docs/rankboard_en.md)
 
 ### Highlights
 
@@ -131,7 +143,8 @@ Current version: `1.10.3`　|　[中文文档](docs/rankboard.md)　|　[English
 
 **NeoForge:**
 1. Install NeoForge for the target Minecraft version.
-2. Put the JAR in the server `mods/` directory.
+2. For 1.21.x use `rankboard-1.10.4+neoforge+mc1.21.x-universal.jar`; for 26.1.x use `rankboard-1.10.4+neoforge+mc26.1.x-universal.jar`; other 26.x versions use the matching version JAR.
+3. Put the JAR in the server `mods/` directory.
 
 Start the server once to create `config/rankboard/`. Restart after editing configuration, or run `/leaderboard config reload`.
 
@@ -158,12 +171,22 @@ gradlew.bat build
 
 Artifacts are written to `build/libs/`.
 
+To build the universal NeoForge 1.21.x JAR manually in PowerShell:
+
+```text
+powershell -ExecutionPolicy Bypass -File scripts/build-universal-neoforge-1.21.ps1 -OutputDirectory release -ModVersion 1.10.4
+python scripts/package_universal_neoforge.py release/variants release/rankboard-1.10.4+neoforge+mc1.21.x-universal.jar
+
+powershell -ExecutionPolicy Bypass -File scripts/build-universal-neoforge-26.1.ps1 -OutputDirectory release -ModVersion 1.10.4
+python scripts/package_universal_neoforge.py --family 26.1 release/variants release/rankboard-1.10.4+neoforge+mc26.1.x-universal.jar
+```
+
 ### GitHub Actions publishing
 
-The release flow follows Carpet-FGA-Addition: create and publish a GitHub Release first (a tag such as `1.10.3` or `v1.10.3` is recommended). Actions then build from that tag. Fabric and NeoForge are intentionally separate:
+The release flow follows Carpet-FGA-Addition: create and publish a GitHub Release first (a tag such as `1.10.4` or `v1.10.4` is recommended). Actions then build from that tag. Fabric and NeoForge are intentionally separate:
 
 - `.github/workflows/release.yml` builds and publishes Fabric only (1.21.x, 26.1.x, 26.2, and 26.3).
-- `.github/workflows/release-neoforge.yml` builds and publishes NeoForge only (the supported 1.21.x, 26.1.x, 26.2, and 26.3 versions).
+- `.github/workflows/release-neoforge.yml` builds and publishes NeoForge; 1.21.x and 26.1.x are available as universal JARs, while 26.2 and 26.3 remain version-specific.
 
 Each workflow uploads only its own JARs and checksums to the existing GitHub Release, then publishes that loader to Modrinth and CurseForge. To repair an existing Release, use **Actions → Run workflow** in the corresponding workflow and enter the Release tag, destinations, and optional version filter.
 

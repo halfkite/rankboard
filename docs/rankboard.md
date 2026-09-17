@@ -430,13 +430,23 @@ gradlew.bat build
 
 构建产物位于 `build/libs/`。发布版本和 Minecraft 版本会写入 JAR 文件名。
 
+NeoForge 1.21.x 可打包为一个通用 JAR：它把 1.21.1、1.21.4、1.21.8、1.21.11 的实现作为私有变体放入同一个文件，启动时按实际 Minecraft 小版本选择兼容实现。PowerShell 构建命令：
+
+```text
+powershell -ExecutionPolicy Bypass -File scripts/build-universal-neoforge-1.21.ps1 -OutputDirectory release -ModVersion 1.10.4
+python scripts/package_universal_neoforge.py release/variants release/rankboard-1.10.4+neoforge+mc1.21.x-universal.jar
+
+powershell -ExecutionPolicy Bypass -File scripts/build-universal-neoforge-26.1.ps1 -OutputDirectory release -ModVersion 1.10.4
+python scripts/package_universal_neoforge.py --family 26.1 release/variants release/rankboard-1.10.4+neoforge+mc26.1.x-universal.jar
+```
+
 多版本构建结果位于 `multi-version-builds/`，每次成功构建也会单独归档到 `mod-builds/` 的时间戳目录。
 
 ## GitHub Actions 发布
 
-先在 GitHub 创建并发布 Release（标签建议使用 `1.10.3` 或 `v1.10.3`）。发布事件会触发两个相互独立的流程：
+先在 GitHub 创建并发布 Release（标签建议使用 `1.10.4` 或 `v1.10.4`）。发布事件会触发两个相互独立的流程：
 
 - `.github/workflows/release.yml` 只构建 Fabric。
 - `.github/workflows/release-neoforge.yml` 只构建 NeoForge。
 
-两个流程分别上传自己的 JAR 和 SHA-256 文件，并分别发布到 Modrinth 与 CurseForge。需要补发已有版本时，在对应流程选择 **Run workflow**，填写 Release 标签、发布目标和可选的版本筛选；Fabric 使用 `1.21.x`、`26.1.x`、`26.2`、`26.3`，NeoForge 使用 `1.21.1`、`26.1.2`、`26.3` 等具体目标。仓库需要配置 `MODRINTH_TOKEN`、`CURSEFORGE_TOKEN`；项目 ID 可用 Repository Variables 覆盖。
+两个流程分别上传自己的 JAR 和 SHA-256 文件，并分别发布到 Modrinth 与 CurseForge。NeoForge 工作流的版本筛选填 `1.21.x` 或 `26.1.x` 时会构建对应通用 JAR；26.2、26.3 仍使用具体目标。需要补发已有版本时，在对应流程选择 **Run workflow**。仓库需要配置 `MODRINTH_TOKEN`、`CURSEFORGE_TOKEN`；项目 ID 可用 Repository Variables 覆盖。

@@ -1,6 +1,6 @@
 package cn.bamgdam.rankboard.mixin;
 
-import cn.bamgdam.rankboard.PlayerNameColors;
+import cn.bamgdam.rankboard.UniversalBridge;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
@@ -14,7 +14,7 @@ public abstract class PlayerEntityNameMixin {
     @Inject(method = "getDisplayName", at = @At("RETURN"), cancellable = true)
     private void rankboard$colorDisplayName(CallbackInfoReturnable<Component> callback) {
         if ((Object) this instanceof ServerPlayer player) {
-            callback.setReturnValue(PlayerNameColors.decorate(player, callback.getReturnValue()));
+            callback.setReturnValue(UniversalBridge.decorate(player, callback.getReturnValue()));
         }
     }
 }

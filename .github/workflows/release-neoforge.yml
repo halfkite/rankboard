@@ -21,7 +21,7 @@ on:
           - modrinth
           - curseforge
       versions:
-        description: NeoForge targets to rebuild (comma-separated or all)
+        description: NeoForge targets to rebuild (use 1.21.x or 26.1.x for a universal JAR, comma-separated or all)
         required: false
         type: string
         default: all
@@ -123,18 +123,6 @@ jobs:
             minecraft: 1.21.11
             neo_version: 21.11.44
             java: '21'
-          - target: 26.1
-            minecraft: 26.1
-            neo_version: 26.1.0.19-beta
-            java: '25'
-          - target: 26.1.1
-            minecraft: 26.1.1
-            neo_version: 26.1.1.15-beta
-            java: '25'
-          - target: 26.1.2
-            minecraft: 26.1.2
-            neo_version: 26.1.2.94
-            java: '25'
           - target: 26.2
             minecraft: 26.2
             neo_version: 26.2.0.41-beta
@@ -216,12 +204,6 @@ jobs:
             game_version: 1.21.8
           - target: 1.21.11
             game_version: 1.21.11
-          - target: 26.1
-            game_version: 26.1
-          - target: 26.1.1
-            game_version: 26.1.1
-          - target: 26.1.2
-            game_version: 26.1.2
           - target: 26.2
             game_version: 26.2
           - target: 26.3
@@ -273,6 +255,194 @@ jobs:
           environment: server
           changelog: |
             修复 QuickBackupMulti 回档后重复创建计分板导致的崩溃；优化网页布局，支持同端口多实例切换服务器排行榜
+          curseforge-id: ${{ vars.CURSEFORGE_NEOFORGE_PROJECT_ID || vars.CURSEFORGE_PROJECT_ID || '1663124' }}
+          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
+          retry-attempts: 3
+          retry-delay: 15000
+
+  build-universal:
+    name: Build NeoForge 1.21.x universal
+    needs: inspect
+    if: ${{ needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), ',1.21.x,') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.inspect.outputs.tag }}
+          fetch-depth: 1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build and package universal NeoForge JAR
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.inspect.outputs.version }}
+        run: |
+          ./scripts/build-universal-neoforge-1.21.ps1 -OutputDirectory release -ModVersion $env:VERSION
+          python3 scripts/package_universal_neoforge.py release/variants "release/rankboard-$env:VERSION+neoforge+mc1.21.x-universal.jar"
+          Get-FileHash "release/rankboard-$env:VERSION+neoforge+mc1.21.x-universal.jar" -Algorithm SHA256 | ForEach-Object {
+            "$($_.Hash.ToLower())  $($_.Path | Split-Path -Leaf)"
+          } | Set-Content "release/rankboard-$env:VERSION+neoforge+mc1.21.x-universal.sha256"
+
+      - name: Upload universal NeoForge artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: neoforge-1.21.x-universal
+          path: release/rankboard-*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-universal:
+    name: Publish NeoForge 1.21.x universal
+    needs: [inspect, build-universal]
+    if: ${{ needs.build-universal.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download universal NeoForge artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: neoforge-1.21.x-universal
+          path: release
+
+      - name: Upload universal asset to GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.inspect.outputs.tag }}
+        run: gh release upload "$RELEASE_TAG" release/*.jar --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: Publish universal NeoForge to Modrinth
+        if: ${{ needs.inspect.outputs.destinations == 'all' || needs.inspect.outputs.destinations == 'modrinth' }}
+        uses: Kira-NT/mc-publish@v3
+        with:
+          files: release/*.jar
+          name: RankBoard ${{ needs.inspect.outputs.version }} NeoForge 1.21.x universal
+          version: ${{ needs.inspect.outputs.version }}
+          version-type: ${{ needs.inspect.outputs.version_type }}
+          loaders: neoforge
+          game-versions: 1.21,1.21.1,1.21.2,1.21.3,1.21.4,1.21.5,1.21.6,1.21.7,1.21.8,1.21.9,1.21.10,1.21.11
+          environment: server
+          changelog: |
+            NeoForge 1.21.x 通用 JAR；启动时自动选择对应小版本实现
+          modrinth-id: ${{ vars.MODRINTH_NEOFORGE_PROJECT_ID || vars.MODRINTH_PROJECT_ID || 'TcDzE8EJ' }}
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          retry-attempts: 3
+          retry-delay: 15000
+
+  build-universal-26-1:
+    name: Build NeoForge 26.1.x universal
+    needs: inspect
+    if: ${{ needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), ',26.1.x,') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.inspect.outputs.tag }}
+          fetch-depth: 1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build and package universal NeoForge 26.1.x JAR
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.inspect.outputs.version }}
+        run: |
+          ./scripts/build-universal-neoforge-26.1.ps1 -OutputDirectory release -ModVersion $env:VERSION
+          python3 scripts/package_universal_neoforge.py --family 26.1 release/variants "release/rankboard-$env:VERSION+neoforge+mc26.1.x-universal.jar"
+          Get-FileHash "release/rankboard-$env:VERSION+neoforge+mc26.1.x-universal.jar" -Algorithm SHA256 | ForEach-Object {
+            "$($_.Hash.ToLower())  $($_.Path | Split-Path -Leaf)"
+          } | Set-Content "release/rankboard-$env:VERSION+neoforge+mc26.1.x-universal.sha256"
+
+      - name: Upload universal NeoForge 26.1.x artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: neoforge-26.1.x-universal
+          path: release/rankboard-*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-universal-26-1:
+    name: Publish NeoForge 26.1.x universal
+    needs: [inspect, build-universal-26-1]
+    if: ${{ needs.build-universal-26-1.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download universal NeoForge 26.1.x artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: neoforge-26.1.x-universal
+          path: release
+
+      - name: Upload universal 26.1.x asset to GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.inspect.outputs.tag }}
+        run: gh release upload "$RELEASE_TAG" release/*.jar --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: Publish universal 26.1.x NeoForge to Modrinth
+        if: ${{ needs.inspect.outputs.destinations == 'all' || needs.inspect.outputs.destinations == 'modrinth' }}
+        uses: Kira-NT/mc-publish@v3
+        with:
+          files: release/*.jar
+          name: RankBoard ${{ needs.inspect.outputs.version }} NeoForge 26.1.x universal
+          version: ${{ needs.inspect.outputs.version }}
+          version-type: ${{ needs.inspect.outputs.version_type }}
+          loaders: neoforge
+          game-versions: 26.1,26.1.1,26.1.2
+          environment: server
+          changelog: |
+            NeoForge 26.1.x 通用 JAR；启动时自动选择对应小版本实现
+          modrinth-id: ${{ vars.MODRINTH_NEOFORGE_PROJECT_ID || vars.MODRINTH_PROJECT_ID || 'TcDzE8EJ' }}
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          retry-attempts: 3
+          retry-delay: 15000
+
+      - name: Publish universal 26.1.x NeoForge to CurseForge
+        if: ${{ needs.inspect.outputs.destinations == 'all' || needs.inspect.outputs.destinations == 'curseforge' }}
+        uses: Kira-NT/mc-publish@v3
+        with:
+          files: release/*.jar
+          name: RankBoard ${{ needs.inspect.outputs.version }} NeoForge 26.1.x universal
+          version: ${{ needs.inspect.outputs.version }}
+          version-type: ${{ needs.inspect.outputs.version_type }}
+          loaders: neoforge
+          game-versions: 26.1,26.1.1,26.1.2
+          environment: server
+          changelog: |
+            NeoForge 26.1.x 通用 JAR；启动时自动选择对应小版本实现
           curseforge-id: ${{ vars.CURSEFORGE_NEOFORGE_PROJECT_ID || vars.CURSEFORGE_PROJECT_ID || '1663124' }}
           curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
           retry-attempts: 3

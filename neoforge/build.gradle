@@ -38,7 +38,9 @@ neoForge {
         }
     }
     mods {
-        rankboard { sourceSet(sourceSets.main) }
+        if (!project.hasProperty('universal_smoke')) {
+            rankboard { sourceSet(sourceSets.main) }
+        }
     }
 }
 
@@ -179,6 +181,12 @@ sourceSets.main.java.setSrcDirs([
         usesLatePlayerApi ? 'src/late-player/java' : 'src/early-player/java',
         usesLatestApi ? 'src/latest/java' : 'src/pre-latest/java'
 ].findAll { it != null })
+// The bootstrap class is only needed by the universal 1.21.x distribution.
+// Keeping it out of a regular per-version jar avoids registering a second
+// @Mod("rankboard") entrypoint alongside RankBoardMod.
+if (!project.hasProperty('universal_build')) {
+    sourceSets.main.java.exclude('**/UniversalNeoForgeEntrypoint.java')
+}
 tasks.named('compileJava').configure { dependsOn 'generateNeoForgeSources' }
 
 def npmExecutable = System.getProperty('os.name').toLowerCase().contains('windows') ? 'npm.cmd' : 'npm'
@@ -211,6 +219,12 @@ processResources {
     dependsOn webBuild
     exclude 'fabric.mod.json'
     from('../web/dist') { into 'rankboard-web' }
+}
+if (project.hasProperty('universal_smoke')) {
+    // Smoke tests load the packaged candidate from build/run-server/mods.
+    // Apply this after processResources adds generated metadata and web files.
+    sourceSets.main.java.setSrcDirs([])
+    sourceSets.main.resources.setSrcDirs([])
 }
 
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }

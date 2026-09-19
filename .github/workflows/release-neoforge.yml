@@ -21,7 +21,7 @@ on:
           - modrinth
           - curseforge
       versions:
-        description: NeoForge targets to rebuild (use 1.21.x or 26.1.x for a merged JAR, comma-separated or all)
+        description: NeoForge targets to rebuild (1.21.x, 26.1.x, 26.2, 26.3; comma-separated or all)
         required: false
         type: string
         default: all
@@ -162,6 +162,15 @@ jobs:
           checksum="${output%.jar}.sha256"
           sha256sum "$output" > "$checksum"
 
+      - name: Verify direct JAR has no embedded variants
+        if: ${{ needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), format(',{0},', matrix.target)) }}
+        shell: bash
+        run: |
+          if unzip -Z1 release/*.jar | grep -q '^META-INF/jars/'; then
+            echo 'Embedded per-minor JARs are not allowed in direct family artifacts.' >&2
+            exit 1
+          fi
+
       - name: Upload NeoForge build artifact
         if: ${{ needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), format(',{0},', matrix.target)) }}
         uses: actions/upload-artifact@v4
@@ -236,8 +245,8 @@ jobs:
           retry-attempts: 3
           retry-delay: 15000
 
-  build-universal:
-    name: Build NeoForge 1.21.x merged
+  build-direct-1-21:
+    name: Build NeoForge 1.21.x direct
     needs: inspect
     if: ${{ needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), ',1.21.x,') }}
     runs-on: ubuntu-latest
@@ -265,50 +274,54 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build and package merged NeoForge JAR
+      - name: Build direct NeoForge 1.21.x JAR
         shell: pwsh
         env:
           VERSION: ${{ needs.inspect.outputs.version }}
         run: |
-          ./scripts/build-universal-neoforge-1.21.ps1 -OutputDirectory release -ModVersion $env:VERSION
-          python3 scripts/package_universal_neoforge.py release/variants "release/rankboard-$env:VERSION+neoforge+mc1.21.jar"
-          Get-FileHash "release/rankboard-$env:VERSION+neoforge+mc1.21.jar" -Algorithm SHA256 | ForEach-Object {
-            "$($_.Hash.ToLower())  $($_.Path | Split-Path -Leaf)"
-          } | Set-Content "release/rankboard-$env:VERSION+neoforge+mc1.21.sha256"
+          ./scripts/build-direct-neoforge.ps1 -Target 1.21.x -OutputDirectory release -ModVersion $env:VERSION
 
-      - name: Upload merged NeoForge artifact
+      - name: Verify direct 1.21.x JAR has no embedded variants
+        shell: bash
+        run: |
+          if unzip -Z1 release/*.jar | grep -q '^META-INF/jars/'; then
+            echo 'Embedded per-minor JARs are not allowed in direct family artifacts.' >&2
+            exit 1
+          fi
+
+      - name: Upload direct NeoForge artifact
         uses: actions/upload-artifact@v4
         with:
-          name: neoforge-1.21-merged
+          name: neoforge-1.21-direct
           path: release/rankboard-*
           if-no-files-found: error
           retention-days: 14
 
-  publish-universal:
-    name: Publish NeoForge 1.21.x merged
-    needs: [inspect, build-universal]
-    if: ${{ needs.build-universal.result == 'success' }}
+  publish-direct-1-21:
+    name: Publish NeoForge 1.21.x direct
+    needs: [inspect, build-direct-1-21]
+    if: ${{ needs.build-direct-1-21.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Download merged NeoForge artifact
+      - name: Download direct NeoForge artifact
         uses: actions/download-artifact@v4
         with:
-          name: neoforge-1.21-merged
+          name: neoforge-1.21-direct
           path: release
 
-      - name: Upload merged asset to GitHub Release
+      - name: Upload direct asset to GitHub Release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.inspect.outputs.tag }}
         run: gh release upload "$RELEASE_TAG" release/*.jar --repo "$GITHUB_REPOSITORY" --clobber
 
-      - name: Publish merged NeoForge to Modrinth
+      - name: Publish direct NeoForge to Modrinth
         if: ${{ needs.inspect.outputs.destinations == 'all' || needs.inspect.outputs.destinations == 'modrinth' }}
         uses: Kira-NT/mc-publish@v3
         with:
           files: release/*.jar
-          name: RankBoard ${{ needs.inspect.outputs.version }} NeoForge 1.21.x merged
+          name: RankBoard ${{ needs.inspect.outputs.version }} NeoForge 1.21.x
           version: ${{ needs.inspect.outputs.version }}
           version-type: ${{ needs.inspect.outputs.version_type }}
           loaders: neoforge
@@ -327,14 +340,14 @@ jobs:
             1.21.11
           environment: server
           changelog: |
-            NeoForge 1.21.x 合并 JAR；启动时自动选择对应小版本实现
+            NeoForge 1.21.x 单次直接构建 JAR；声明兼容 1.21.x 版本范围
           modrinth-id: ${{ vars.MODRINTH_NEOFORGE_PROJECT_ID || vars.MODRINTH_PROJECT_ID || 'TcDzE8EJ' }}
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           retry-attempts: 3
           retry-delay: 15000
 
-  build-universal-26-1:
-    name: Build NeoForge 26.1.x merged
+  build-direct-26-1:
+    name: Build NeoForge 26.1.x direct
     needs: inspect
     if: ${{ needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), ',26.1.x,') }}
     runs-on: ubuntu-latest
@@ -362,50 +375,54 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build and package merged NeoForge 26.1.x JAR
+      - name: Build direct NeoForge 26.1.x JAR
         shell: pwsh
         env:
           VERSION: ${{ needs.inspect.outputs.version }}
         run: |
-          ./scripts/build-universal-neoforge-26.1.ps1 -OutputDirectory release -ModVersion $env:VERSION
-          python3 scripts/package_universal_neoforge.py --family 26.1 release/variants "release/rankboard-$env:VERSION+neoforge+mc26.1.jar"
-          Get-FileHash "release/rankboard-$env:VERSION+neoforge+mc26.1.jar" -Algorithm SHA256 | ForEach-Object {
-            "$($_.Hash.ToLower())  $($_.Path | Split-Path -Leaf)"
-          } | Set-Content "release/rankboard-$env:VERSION+neoforge+mc26.1.sha256"
+          ./scripts/build-direct-neoforge.ps1 -Target 26.1.x -OutputDirectory release -ModVersion $env:VERSION
 
-      - name: Upload merged NeoForge 26.1.x artifact
+      - name: Verify direct 26.1.x JAR has no embedded variants
+        shell: bash
+        run: |
+          if unzip -Z1 release/*.jar | grep -q '^META-INF/jars/'; then
+            echo 'Embedded per-minor JARs are not allowed in direct family artifacts.' >&2
+            exit 1
+          fi
+
+      - name: Upload direct NeoForge 26.1.x artifact
         uses: actions/upload-artifact@v4
         with:
-          name: neoforge-26.1-merged
+          name: neoforge-26.1-direct
           path: release/rankboard-*
           if-no-files-found: error
           retention-days: 14
 
-  publish-universal-26-1:
-    name: Publish NeoForge 26.1.x merged
-    needs: [inspect, build-universal-26-1]
-    if: ${{ needs.build-universal-26-1.result == 'success' }}
+  publish-direct-26-1:
+    name: Publish NeoForge 26.1.x direct
+    needs: [inspect, build-direct-26-1]
+    if: ${{ needs.build-direct-26-1.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Download merged NeoForge 26.1.x artifact
+      - name: Download direct NeoForge 26.1.x artifact
         uses: actions/download-artifact@v4
         with:
-          name: neoforge-26.1-merged
+          name: neoforge-26.1-direct
           path: release
 
-      - name: Upload merged 26.1.x asset to GitHub Release
+      - name: Upload direct 26.1.x asset to GitHub Release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.inspect.outputs.tag }}
         run: gh release upload "$RELEASE_TAG" release/*.jar --repo "$GITHUB_REPOSITORY" --clobber
 
-      - name: Publish merged 26.1.x NeoForge to Modrinth
+      - name: Publish direct 26.1.x NeoForge to Modrinth
         if: ${{ needs.inspect.outputs.destinations == 'all' || needs.inspect.outputs.destinations == 'modrinth' }}
         uses: Kira-NT/mc-publish@v3
         with:
           files: release/*.jar
-          name: RankBoard ${{ needs.inspect.outputs.version }} NeoForge 26.1.x merged
+          name: RankBoard ${{ needs.inspect.outputs.version }} NeoForge 26.1.x
           version: ${{ needs.inspect.outputs.version }}
           version-type: ${{ needs.inspect.outputs.version_type }}
           loaders: neoforge
@@ -415,18 +432,18 @@ jobs:
             26.1.2
           environment: server
           changelog: |
-            NeoForge 26.1.x 合并 JAR；启动时自动选择对应小版本实现
+            NeoForge 26.1.x 单次直接构建 JAR；声明兼容 26.1.x 版本范围
           modrinth-id: ${{ vars.MODRINTH_NEOFORGE_PROJECT_ID || vars.MODRINTH_PROJECT_ID || 'TcDzE8EJ' }}
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           retry-attempts: 3
           retry-delay: 15000
 
-      - name: Publish merged 26.1.x NeoForge to CurseForge
+      - name: Publish direct 26.1.x NeoForge to CurseForge
         if: ${{ needs.inspect.outputs.destinations == 'all' || needs.inspect.outputs.destinations == 'curseforge' }}
         uses: Kira-NT/mc-publish@v3
         with:
           files: release/*.jar
-          name: RankBoard ${{ needs.inspect.outputs.version }} NeoForge 26.1.x merged
+          name: RankBoard ${{ needs.inspect.outputs.version }} NeoForge 26.1.x
           version: ${{ needs.inspect.outputs.version }}
           version-type: ${{ needs.inspect.outputs.version_type }}
           loaders: neoforge
@@ -436,7 +453,7 @@ jobs:
             26.1.2
           environment: server
           changelog: |
-            NeoForge 26.1.x 合并 JAR；启动时自动选择对应小版本实现
+            NeoForge 26.1.x 单次直接构建 JAR；声明兼容 26.1.x 版本范围
           curseforge-id: ${{ vars.CURSEFORGE_NEOFORGE_PROJECT_ID || vars.CURSEFORGE_PROJECT_ID || '1663124' }}
           curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
           retry-attempts: 3

@@ -430,17 +430,16 @@ gradlew.bat build
 
 构建产物位于 `build/libs/`。发布版本和 Minecraft 版本会写入 JAR 文件名。
 
-NeoForge 1.21.x 可打包为一个合并 JAR：它把 1.21.1、1.21.4、1.21.8、1.21.11 的实现作为私有变体放入同一个文件，启动时按实际 Minecraft 小版本选择兼容实现。PowerShell 构建命令：
+每个平台/版本家族都直接编译为一个 JAR，不再把多个小版本 JAR 嵌套到 `META-INF/jars`。PowerShell 构建命令：
 
 ```text
-powershell -ExecutionPolicy Bypass -File scripts/build-universal-neoforge-1.21.ps1 -OutputDirectory release -ModVersion 1.10.5
-python scripts/package_universal_neoforge.py release/variants release/rankboard-1.10.5+neoforge+mc1.21.jar
-
-powershell -ExecutionPolicy Bypass -File scripts/build-universal-neoforge-26.1.ps1 -OutputDirectory release -ModVersion 1.10.5
-python scripts/package_universal_neoforge.py --family 26.1 release/variants release/rankboard-1.10.5+neoforge+mc26.1.jar
+powershell -ExecutionPolicy Bypass -File scripts/build-direct-fabric.ps1 -Target 1.21.x -OutputDirectory release -ModVersion 1.10.5
+powershell -ExecutionPolicy Bypass -File scripts/build-direct-neoforge.ps1 -Target 1.21.x -OutputDirectory release -ModVersion 1.10.5
+powershell -ExecutionPolicy Bypass -File scripts/build-direct-fabric.ps1 -Target 26.1.x -OutputDirectory release -ModVersion 1.10.5
+powershell -ExecutionPolicy Bypass -File scripts/build-direct-neoforge.ps1 -Target 26.1.x -OutputDirectory release -ModVersion 1.10.5
 ```
 
-多版本构建结果位于 `multi-version-builds/`，每次成功构建也会单独归档到 `mod-builds/` 的时间戳目录。
+每次成功构建会单独归档到 `mod-builds/` 的时间戳目录，并记录 SHA-256 与构建命令。
 
 ## GitHub Actions 发布
 
@@ -449,4 +448,4 @@ python scripts/package_universal_neoforge.py --family 26.1 release/variants rele
 - `.github/workflows/release.yml` 只构建 Fabric。
 - `.github/workflows/release-neoforge.yml` 只构建 NeoForge。
 
-两个流程分别上传自己的 JAR 和 SHA-256 文件，并分别发布到 Modrinth 与 CurseForge。NeoForge 工作流的版本筛选填 `1.21.x` 或 `26.1.x` 时会构建对应合并 JAR；26.2、26.3 仍使用具体目标。需要补发已有版本时，在对应流程选择 **Run workflow**。仓库需要配置 `MODRINTH_TOKEN`、`CURSEFORGE_TOKEN`；项目 ID 可用 Repository Variables 覆盖。
+两个流程分别上传自己的 JAR，并分别发布到 Modrinth 与 CurseForge；SHA-256 只作为本地 sidecar 校验文件，不会作为额外发布资产上传。NeoForge 工作流的版本筛选填 `1.21.x` 或 `26.1.x` 时会直接构建一个对应家族 JAR；26.2、26.3 也各自直接构建一个目标 JAR。需要补发已有版本时，在对应流程选择 **Run workflow**。仓库需要配置 `MODRINTH_TOKEN`、`CURSEFORGE_TOKEN`；项目 ID 可用 Repository Variables 覆盖。

@@ -139,19 +139,19 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build 1.21.x wrapper
+      - name: Build 1.21.x direct JAR
         if: ${{ matrix.target == '1.21.x' && (needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), format(',{0},', matrix.target))) }}
         shell: pwsh
         env:
           VERSION: ${{ needs.inspect.outputs.version }}
-        run: ./scripts/build-universal-1.21.ps1 -OutputDirectory release -ModVersion $env:VERSION
+        run: ./scripts/build-direct-fabric.ps1 -Target 1.21.x -OutputDirectory release -ModVersion $env:VERSION
 
-      - name: Build 26.1.x wrapper
+      - name: Build 26.1.x direct JAR
         if: ${{ matrix.target == '26.1.x' && (needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), format(',{0},', matrix.target))) }}
         shell: pwsh
         env:
           VERSION: ${{ needs.inspect.outputs.version }}
-        run: ./scripts/build-wrapper-26.1.ps1 -OutputDirectory release -ModVersion $env:VERSION
+        run: ./scripts/build-direct-fabric.ps1 -Target 26.1.x -OutputDirectory release -ModVersion $env:VERSION
 
       - name: Build 26.2 artifact
         if: ${{ matrix.target == '26.2' && (needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), format(',{0},', matrix.target))) }}
@@ -205,6 +205,15 @@ jobs:
           if [[ "$artifact" != "$output" ]]; then mv "$artifact" "$output"; fi
           checksum="${output%.jar}.sha256"
           sha256sum "$output" > "$checksum"
+
+      - name: Verify direct JAR has no embedded variants
+        if: ${{ needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), format(',{0},', matrix.target)) }}
+        shell: bash
+        run: |
+          if unzip -Z1 release/*.jar | grep -q '^META-INF/jars/'; then
+            echo 'Embedded per-minor JARs are not allowed in direct family artifacts.' >&2
+            exit 1
+          fi
 
       - name: Upload Fabric build artifact
         if: ${{ needs.inspect.outputs.versions == 'all' || contains(format(',{0},', needs.inspect.outputs.versions), format(',{0},', matrix.target)) }}

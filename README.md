@@ -24,8 +24,8 @@
 | Fabric | 26.1、26.1.1、26.1.2 | 维护中 | 1.10.5 |
 | Fabric | 26.2 | 维护中 | 1.10.5 |
 | Fabric | 26.3 | 维护中 | 1.10.5 |
-| NeoForge | 1.21.x | 维护中（一个合并 JAR，启动时自动选择小版本实现） | 1.10.5 |
-| NeoForge | 26.1.x | 维护中（一个合并 JAR，启动时自动选择小版本实现） | 1.10.5 |
+| NeoForge | 1.21.x | 维护中（单次直接构建，声明 1.21.x 兼容范围） | 1.10.5 |
+| NeoForge | 26.1.x | 维护中（单次直接构建，声明 26.1.x 兼容范围） | 1.10.5 |
 | NeoForge | 26.2、26.3 | 维护中 | 1.10.5 |
 
 ## 文档
@@ -92,14 +92,13 @@ gradlew.bat build
 
 构建产物位于 `build/libs/`。
 
-需要手动构建 NeoForge 1.21.x 或 26.1.x 合并 JAR 时，在 PowerShell 执行：
+需要手动构建某个平台/版本家族的单次直接 JAR 时，在 PowerShell 执行（不会嵌套多个小版本 JAR）：
 
 ```text
-powershell -ExecutionPolicy Bypass -File scripts/build-universal-neoforge-1.21.ps1 -OutputDirectory release -ModVersion 1.10.5
-python scripts/package_universal_neoforge.py release/variants release/rankboard-1.10.5+neoforge+mc1.21.jar
-
-powershell -ExecutionPolicy Bypass -File scripts/build-universal-neoforge-26.1.ps1 -OutputDirectory release -ModVersion 1.10.5
-python scripts/package_universal_neoforge.py --family 26.1 release/variants release/rankboard-1.10.5+neoforge+mc26.1.jar
+powershell -ExecutionPolicy Bypass -File scripts/build-direct-fabric.ps1 -Target 1.21.x -OutputDirectory release -ModVersion 1.10.5
+powershell -ExecutionPolicy Bypass -File scripts/build-direct-neoforge.ps1 -Target 1.21.x -OutputDirectory release -ModVersion 1.10.5
+powershell -ExecutionPolicy Bypass -File scripts/build-direct-fabric.ps1 -Target 26.1.x -OutputDirectory release -ModVersion 1.10.5
+powershell -ExecutionPolicy Bypass -File scripts/build-direct-neoforge.ps1 -Target 26.1.x -OutputDirectory release -ModVersion 1.10.5
 ```
 
 ### GitHub Actions 发布
@@ -107,9 +106,9 @@ python scripts/package_universal_neoforge.py --family 26.1 release/variants rele
 发布流程仿照 Carpet-FGA-Addition：先在 GitHub 创建并发布一个 Release（标签建议使用 `1.10.5` 或 `v1.10.5`），随后 Actions 会从该标签构建并上传产物。Fabric 与 NeoForge 是两个独立的工作流和发布任务：
 
 - `.github/workflows/release.yml`：只构建和发布 Fabric（1.21.x、26.1.x、26.2、26.3）。
-- `.github/workflows/release-neoforge.yml`：构建并发布 NeoForge；1.21.x 和 26.1.x 各提供一个合并 JAR，26.2 与 26.3 继续按版本构建。
+- `.github/workflows/release-neoforge.yml`：构建并发布 NeoForge；每个目标家族只直接编译一次（1.21.x、26.1.x、26.2、26.3）。
 
-两个工作流都将自己的 JAR 和校验文件上传到现有 GitHub Release，并分别发布到 Modrinth、CurseForge。需要修复某个已有 Release 时，可在对应工作流选择 **Run workflow**，填写 Release 标签、发布目标和版本筛选。
+两个工作流都只将自己的 JAR 上传到现有 GitHub Release，并分别发布到 Modrinth、CurseForge；校验文件只在本地构建目录生成。需要修复某个已有 Release 时，可在对应工作流选择 **Run workflow**，填写 Release 标签、发布目标和版本筛选。
 
 发布前需要在仓库 **Settings → Secrets and variables → Actions** 添加以下 Secrets：
 
@@ -171,14 +170,13 @@ gradlew.bat build
 
 Artifacts are written to `build/libs/`.
 
-To build the merged NeoForge 1.21.x or 26.1.x JAR manually in PowerShell:
+To build a single direct JAR for a platform/version family in PowerShell (no nested per-minor JARs):
 
 ```text
-powershell -ExecutionPolicy Bypass -File scripts/build-universal-neoforge-1.21.ps1 -OutputDirectory release -ModVersion 1.10.5
-python scripts/package_universal_neoforge.py release/variants release/rankboard-1.10.5+neoforge+mc1.21.jar
-
-powershell -ExecutionPolicy Bypass -File scripts/build-universal-neoforge-26.1.ps1 -OutputDirectory release -ModVersion 1.10.5
-python scripts/package_universal_neoforge.py --family 26.1 release/variants release/rankboard-1.10.5+neoforge+mc26.1.jar
+powershell -ExecutionPolicy Bypass -File scripts/build-direct-fabric.ps1 -Target 1.21.x -OutputDirectory release -ModVersion 1.10.5
+powershell -ExecutionPolicy Bypass -File scripts/build-direct-neoforge.ps1 -Target 1.21.x -OutputDirectory release -ModVersion 1.10.5
+powershell -ExecutionPolicy Bypass -File scripts/build-direct-fabric.ps1 -Target 26.1.x -OutputDirectory release -ModVersion 1.10.5
+powershell -ExecutionPolicy Bypass -File scripts/build-direct-neoforge.ps1 -Target 26.1.x -OutputDirectory release -ModVersion 1.10.5
 ```
 
 ### GitHub Actions publishing
@@ -186,9 +184,9 @@ python scripts/package_universal_neoforge.py --family 26.1 release/variants rele
 The release flow follows Carpet-FGA-Addition: create and publish a GitHub Release first (a tag such as `1.10.5` or `v1.10.5` is recommended). Actions then build from that tag. Fabric and NeoForge are intentionally separate:
 
 - `.github/workflows/release.yml` builds and publishes Fabric only (1.21.x, 26.1.x, 26.2, and 26.3).
-- `.github/workflows/release-neoforge.yml` builds and publishes NeoForge; 1.21.x and 26.1.x are available as merged JARs, while 26.2 and 26.3 remain version-specific.
+- `.github/workflows/release-neoforge.yml` builds and publishes NeoForge; every target family is compiled once directly (1.21.x, 26.1.x, 26.2, and 26.3).
 
-Each workflow uploads only its own JARs and checksums to the existing GitHub Release, then publishes that loader to Modrinth and CurseForge. To repair an existing Release, use **Actions → Run workflow** in the corresponding workflow and enter the Release tag, destinations, and optional version filter.
+Each workflow uploads only its own JARs to the existing GitHub Release; checksums are generated locally as sidecar files and are not uploaded as extra release assets. To repair an existing Release, use **Actions → Run workflow** in the corresponding workflow and enter the Release tag, destinations, and optional version filter.
 
 Before publishing, add these repository Actions secrets under **Settings → Secrets and variables → Actions**:
 

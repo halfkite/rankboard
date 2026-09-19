@@ -204,8 +204,12 @@ tasks.register('webBuild', Exec) {
 }
 
 def generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
+    // A family build may compile against the newest patch toolchain while
+    // remaining installable on the whole supported NeoForge family. Keep the
+    // compiler/toolchain version separate from the metadata minimum.
+    def neoDependencyVersion = project.findProperty('neo_dependency_version') ?: neo_version
     def values = [minecraft_version: minecraft_version, minecraft_version_range: minecraft_version_range,
-                  neo_version: neo_version, loader_version_range: loader_version_range,
+                  neo_version: neoDependencyVersion, loader_version_range: loader_version_range,
                   mod_id: mod_id, mod_name: mod_name, mod_license: mod_license, mod_version: mod_version]
     inputs.properties values
     expand values

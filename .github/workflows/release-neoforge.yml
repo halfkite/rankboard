@@ -312,7 +312,19 @@ jobs:
           version: ${{ needs.inspect.outputs.version }}
           version-type: ${{ needs.inspect.outputs.version_type }}
           loaders: neoforge
-          game-versions: 1.21,1.21.1,1.21.2,1.21.3,1.21.4,1.21.5,1.21.6,1.21.7,1.21.8,1.21.9,1.21.10,1.21.11
+          game-versions: |
+            1.21
+            1.21.1
+            1.21.2
+            1.21.3
+            1.21.4
+            1.21.5
+            1.21.6
+            1.21.7
+            1.21.8
+            1.21.9
+            1.21.10
+            1.21.11
           environment: server
           changelog: |
             NeoForge 1.21.x 合并 JAR；启动时自动选择对应小版本实现
@@ -397,7 +409,10 @@ jobs:
           version: ${{ needs.inspect.outputs.version }}
           version-type: ${{ needs.inspect.outputs.version_type }}
           loaders: neoforge
-          game-versions: 26.1,26.1.1,26.1.2
+          game-versions: |
+            26.1
+            26.1.1
+            26.1.2
           environment: server
           changelog: |
             NeoForge 26.1.x 合并 JAR；启动时自动选择对应小版本实现
@@ -415,7 +430,10 @@ jobs:
           version: ${{ needs.inspect.outputs.version }}
           version-type: ${{ needs.inspect.outputs.version_type }}
           loaders: neoforge
-          game-versions: 26.1,26.1.1,26.1.2
+          game-versions: |
+            26.1
+            26.1.1
+            26.1.2
           environment: server
           changelog: |
             NeoForge 26.1.x 合并 JAR；启动时自动选择对应小版本实现

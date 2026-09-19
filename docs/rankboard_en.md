@@ -433,18 +433,18 @@ Artifacts are written to `build/libs/`. The JAR filename includes the mod and Mi
 NeoForge 1.21.x can be packaged as one merged JAR. It contains private 1.21.1, 1.21.4, 1.21.8, and 1.21.11 implementations and selects the compatible one at startup. In PowerShell:
 
 ```text
-powershell -ExecutionPolicy Bypass -File scripts/build-universal-neoforge-1.21.ps1 -OutputDirectory release -ModVersion 1.10.4
-python scripts/package_universal_neoforge.py release/variants release/rankboard-1.10.4+neoforge+mc1.21.jar
+powershell -ExecutionPolicy Bypass -File scripts/build-universal-neoforge-1.21.ps1 -OutputDirectory release -ModVersion 1.10.5
+python scripts/package_universal_neoforge.py release/variants release/rankboard-1.10.5+neoforge+mc1.21.jar
 
-powershell -ExecutionPolicy Bypass -File scripts/build-universal-neoforge-26.1.ps1 -OutputDirectory release -ModVersion 1.10.4
-python scripts/package_universal_neoforge.py --family 26.1 release/variants release/rankboard-1.10.4+neoforge+mc26.1.jar
+powershell -ExecutionPolicy Bypass -File scripts/build-universal-neoforge-26.1.ps1 -OutputDirectory release -ModVersion 1.10.5
+python scripts/package_universal_neoforge.py --family 26.1 release/variants release/rankboard-1.10.5+neoforge+mc26.1.jar
 ```
 
 Multi-version results are collected under `multi-version-builds/`; every successful build is also archived in a timestamped directory under `mod-builds/`.
 
 ## GitHub Actions publishing
 
-Create and publish a GitHub Release first (a tag such as `1.10.4` or `v1.10.4` is recommended). The published event starts two independent workflows:
+Create and publish a GitHub Release first (a tag such as `1.10.5` or `v1.10.5` is recommended). The published event starts two independent workflows:
 
 - `.github/workflows/release.yml` builds Fabric only.
 - `.github/workflows/release-neoforge.yml` builds NeoForge only.

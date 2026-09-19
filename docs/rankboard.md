@@ -433,18 +433,18 @@ gradlew.bat build
 NeoForge 1.21.x 可打包为一个合并 JAR：它把 1.21.1、1.21.4、1.21.8、1.21.11 的实现作为私有变体放入同一个文件，启动时按实际 Minecraft 小版本选择兼容实现。PowerShell 构建命令：
 
 ```text
-powershell -ExecutionPolicy Bypass -File scripts/build-universal-neoforge-1.21.ps1 -OutputDirectory release -ModVersion 1.10.4
-python scripts/package_universal_neoforge.py release/variants release/rankboard-1.10.4+neoforge+mc1.21.jar
+powershell -ExecutionPolicy Bypass -File scripts/build-universal-neoforge-1.21.ps1 -OutputDirectory release -ModVersion 1.10.5
+python scripts/package_universal_neoforge.py release/variants release/rankboard-1.10.5+neoforge+mc1.21.jar
 
-powershell -ExecutionPolicy Bypass -File scripts/build-universal-neoforge-26.1.ps1 -OutputDirectory release -ModVersion 1.10.4
-python scripts/package_universal_neoforge.py --family 26.1 release/variants release/rankboard-1.10.4+neoforge+mc26.1.jar
+powershell -ExecutionPolicy Bypass -File scripts/build-universal-neoforge-26.1.ps1 -OutputDirectory release -ModVersion 1.10.5
+python scripts/package_universal_neoforge.py --family 26.1 release/variants release/rankboard-1.10.5+neoforge+mc26.1.jar
 ```
 
 多版本构建结果位于 `multi-version-builds/`，每次成功构建也会单独归档到 `mod-builds/` 的时间戳目录。
 
 ## GitHub Actions 发布
 
-先在 GitHub 创建并发布 Release（标签建议使用 `1.10.4` 或 `v1.10.4`）。发布事件会触发两个相互独立的流程：
+先在 GitHub 创建并发布 Release（标签建议使用 `1.10.5` 或 `v1.10.5`）。发布事件会触发两个相互独立的流程：
 
 - `.github/workflows/release.yml` 只构建 Fabric。
 - `.github/workflows/release-neoforge.yml` 只构建 NeoForge。

@@ -34,6 +34,9 @@ if (project.findProperty('loom_custom_metadata')) {
 sourceSets.main.java {
     if (versionParts[0] >= 26) {
         setSrcDirs(['src/mojmap/java'])
+        // The NeoForge bootstrap is packaged separately by the NeoForge project.
+        // Fabric 26.x builds must not compile this NeoForge-only entrypoint.
+        exclude 'cn/bamgdam/rankboard/UniversalNeoForgeEntrypoint.java'
     } else if (usesModernApi) {
         exclude 'cn/bamgdam/rankboard/NbtCompat.java'
         exclude 'cn/bamgdam/rankboard/PersistentStateCompat.java'

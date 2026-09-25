@@ -918,7 +918,9 @@ public final class RankBoardMod implements ModInitializer {
 
     private void sendJoinExperience(ServerPlayer player) {
         if (PlayerCompat.isFake(player)) return;
-        sendLanguagePrompt(player);
+        CommandSourceStack source = player.createCommandSourceStack();
+        boolean op = CommandPermissionCompat.has(source, 2);
+        if (op) sendLanguagePrompt(player);
         RankBoardConfig config = RankBoardConfig.get();
         if (config.welcomeEnabled) {
             player.sendSystemMessage(Component.literal(RankBoardLanguage.text(player, "welcome",
@@ -928,7 +930,15 @@ public final class RankBoardMod implements ModInitializer {
             player.sendSystemMessage(Component.literal(RankBoardLanguage.text(player, "web_hint",
                     config.webAddress(PlayerCompat.server(player)))).withStyle(ChatFormatting.AQUA), false);
         }
-        if (config.joinMenuEnabled) menu(player.createCommandSourceStack());
+        if (config.joinMenuEnabled) {
+            if (op) {
+                menu(source);
+            } else {
+                source.sendSuccess(() -> clickable("[" + RankBoardLanguage.text(player, "menu.expand_details") + "]",
+                        ChatFormatting.GOLD, "/leaderboard",
+                        RankBoardLanguage.text(player, "menu.tooltip.expand_details")), false);
+            }
+        }
     }
 
     private int setLanguage(CommandSourceStack source, String code) {
@@ -1523,18 +1533,18 @@ public final class RankBoardMod implements ModInitializer {
 
     public enum Metric {
         FOOD("food", "大胃王榜", ChatFormatting.GOLD, RankBoardMod::foodUsed),
-        JUMPS("jumps", "跳跃榜", ChatFormatting.LIGHT_PURPLE, p -> custom(p, Stats.JUMP)),
+        JUMPS("jumps", "跳跃榜", ChatFormatting.LIGHT_PURPLE, p -> StatCompat.custom(p, "JUMP")),
         MINED("mined", "挖掘榜", ChatFormatting.BLUE, RankBoardMod::mined),
         PLACED("placed", "放置榜", ChatFormatting.DARK_AQUA, RankBoardMod::placed),
-        KILLS("kills", "击杀榜", ChatFormatting.RED, p -> custom(p, Stats.MOB_KILLS) + custom(p, Stats.PLAYER_KILLS)),
-        PVP_KILLS("pvp", "PvP榜", ChatFormatting.DARK_RED, p -> custom(p, Stats.PLAYER_KILLS)),
-        DEATHS("deaths", "死亡榜", ChatFormatting.DARK_RED, p -> custom(p, Stats.DEATHS)),
-        TRADES("trades", "交易榜", ChatFormatting.GREEN, p -> custom(p, Stats.TRADED_WITH_VILLAGER)),
-        PLAY_TIME("playtime", "在线榜", ChatFormatting.AQUA, p -> custom(p, Stats.PLAY_TIME)),
-        ELYTRA_DISTANCE("elytra", "飞行榜", ChatFormatting.LIGHT_PURPLE, p -> custom(p, Stats.AVIATE_ONE_CM)),
-        FISHING("fishing", "钓鱼榜", ChatFormatting.DARK_BLUE, p -> custom(p, Stats.FISH_CAUGHT)),
-        DAMAGE_TAKEN("damage", "受伤榜", ChatFormatting.RED, p -> custom(p, Stats.DAMAGE_TAKEN)),
-        DAMAGE_DEALT("dealt", "输出榜", ChatFormatting.GOLD, p -> custom(p, Stats.DAMAGE_DEALT)),
+        KILLS("kills", "击杀榜", ChatFormatting.RED, p -> StatCompat.custom(p, "MOB_KILLS") + StatCompat.custom(p, "PLAYER_KILLS")),
+        PVP_KILLS("pvp", "PvP榜", ChatFormatting.DARK_RED, p -> StatCompat.custom(p, "PLAYER_KILLS")),
+        DEATHS("deaths", "死亡榜", ChatFormatting.DARK_RED, p -> StatCompat.custom(p, "DEATHS")),
+        TRADES("trades", "交易榜", ChatFormatting.GREEN, p -> StatCompat.custom(p, "TRADED_WITH_VILLAGER")),
+        PLAY_TIME("playtime", "在线榜", ChatFormatting.AQUA, p -> StatCompat.custom(p, "PLAY_TIME")),
+        ELYTRA_DISTANCE("elytra", "飞行榜", ChatFormatting.LIGHT_PURPLE, p -> StatCompat.custom(p, "AVIATE_ONE_CM")),
+        FISHING("fishing", "钓鱼榜", ChatFormatting.DARK_BLUE, p -> StatCompat.custom(p, "FISH_CAUGHT")),
+        DAMAGE_TAKEN("damage", "受伤榜", ChatFormatting.RED, p -> StatCompat.custom(p, "DAMAGE_TAKEN")),
+        DAMAGE_DEALT("dealt", "输出榜", ChatFormatting.GOLD, p -> StatCompat.custom(p, "DAMAGE_DEALT")),
         DROPPED("dropped", "丢垃圾榜", ChatFormatting.DARK_GRAY, RankBoardMod::dropped),
         PICKED_UP("picked", "拾荒榜", ChatFormatting.GREEN, RankBoardMod::pickedUp),
         CRAFTED("crafted", "合成榜", ChatFormatting.GOLD, RankBoardMod::crafted),
@@ -1573,8 +1583,7 @@ public final class RankBoardMod implements ModInitializer {
         WhitelistMode(String label) { this.label = label; }
     }
 
-    private static long custom(ServerPlayer player, net.minecraft.resources.Identifier stat) { return player.getStats().getValue(Stats.CUSTOM.get(stat)); }
-    private static long foodUsed(ServerPlayer player) { return BuiltInRegistries.ITEM.stream().filter(item -> item.components().get(DataComponents.FOOD) != null).mapToLong(item -> player.getStats().getValue(Stats.ITEM_USED.get(item))).sum(); }
+    private static long foodUsed(ServerPlayer player) { return BuiltInRegistries.ITEM.stream().filter(item -> ComponentLookupCompat.has(item.components(), DataComponents.FOOD)).mapToLong(item -> player.getStats().getValue(Stats.ITEM_USED.get(item))).sum(); }
     private static long mined(ServerPlayer player) { return BuiltInRegistries.BLOCK.stream().mapToLong(block -> player.getStats().getValue(Stats.BLOCK_MINED.get(block))).sum(); }
     private static long placed(ServerPlayer player) { return BuiltInRegistries.ITEM.stream().filter(BlockItem.class::isInstance).mapToLong(item -> player.getStats().getValue(Stats.ITEM_USED.get(item))).sum(); }
     private static long dropped(ServerPlayer player) { return BuiltInRegistries.ITEM.stream().mapToLong(item -> player.getStats().getValue(Stats.ITEM_DROPPED.get(item))).sum(); }
@@ -1582,7 +1591,7 @@ public final class RankBoardMod implements ModInitializer {
     private static long crafted(ServerPlayer player) { return BuiltInRegistries.ITEM.stream().mapToLong(item -> player.getStats().getValue(Stats.ITEM_CRAFTED.get(item))).sum(); }
     private static long redstonePlaced(ServerPlayer player) { return BuiltInRegistries.ITEM.stream().filter(RankBoardMod::isRedstoneComponent).mapToLong(item -> player.getStats().getValue(Stats.ITEM_USED.get(item))).sum(); }
     static boolean isRedstoneComponent(Item item) {
-        String path = BuiltInRegistries.ITEM.getKey(item).getPath();
+        String path = RegistryKeyCompat.path(BuiltInRegistries.ITEM, item);
         return REDSTONE_COMPONENTS.contains(path) || path.endsWith("_button") || path.endsWith("_pressure_plate")
                 || path.endsWith("_door") || path.endsWith("_trapdoor") || path.endsWith("_fence_gate") || path.endsWith("_bulb");
     }

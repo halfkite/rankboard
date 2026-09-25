@@ -433,17 +433,17 @@ Artifacts are written to `build/libs/`. The JAR filename includes the mod and Mi
 Each supported platform/version family is built as one direct JAR. No per-minor JARs are embedded in `META-INF/jars`; the family metadata declares its supported range. In PowerShell:
 
 ```text
-powershell -ExecutionPolicy Bypass -File scripts/build-direct-fabric.ps1 -Target 1.21.x -OutputDirectory release -ModVersion 1.10.5
-powershell -ExecutionPolicy Bypass -File scripts/build-direct-neoforge.ps1 -Target 1.21.x -OutputDirectory release -ModVersion 1.10.5
-powershell -ExecutionPolicy Bypass -File scripts/build-direct-fabric.ps1 -Target 26.1.x -OutputDirectory release -ModVersion 1.10.5
-powershell -ExecutionPolicy Bypass -File scripts/build-direct-neoforge.ps1 -Target 26.1.x -OutputDirectory release -ModVersion 1.10.5
+powershell -ExecutionPolicy Bypass -File scripts/build-direct-fabric.ps1 -Target 1.21.x -OutputDirectory release -ModVersion 1.10.6
+powershell -ExecutionPolicy Bypass -File scripts/build-direct-neoforge.ps1 -Target 1.21.x -OutputDirectory release -ModVersion 1.10.6
+powershell -ExecutionPolicy Bypass -File scripts/build-direct-fabric.ps1 -Target 26.1.x -OutputDirectory release -ModVersion 1.10.6
+powershell -ExecutionPolicy Bypass -File scripts/build-direct-neoforge.ps1 -Target 26.1.x -OutputDirectory release -ModVersion 1.10.6
 ```
 
 Every successful build is archived in its own timestamped directory under `mod-builds/` with its SHA-256 and build command.
 
 ## GitHub Actions publishing
 
-Create and publish a GitHub Release first (a tag such as `1.10.5` or `v1.10.5` is recommended). The published event starts two independent workflows:
+Create and publish a GitHub Release first using the `1.10.6` tag. The published event starts two independent workflows:
 
 - `.github/workflows/release.yml` builds Fabric only.
 - `.github/workflows/release-neoforge.yml` builds NeoForge only.

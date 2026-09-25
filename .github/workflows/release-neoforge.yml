@@ -221,7 +221,7 @@ jobs:
           game-versions: ${{ matrix.game_version }}
           environment: server
           changelog: |
-            修复 QuickBackupMulti 回档后重复创建计分板导致的崩溃；优化网页布局，支持同端口多实例切换服务器排行榜
+            修复 1.21.x 跨小版本服务端兼容问题；普通玩家进服仅显示“展开榜单信息”按钮，OP 保留详细管理菜单；发布 NeoForge 版本家族单 JAR
           modrinth-id: ${{ vars.MODRINTH_NEOFORGE_PROJECT_ID || vars.MODRINTH_PROJECT_ID || 'TcDzE8EJ' }}
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           retry-attempts: 3
@@ -239,7 +239,7 @@ jobs:
           game-versions: ${{ matrix.game_version }}
           environment: server
           changelog: |
-            修复 QuickBackupMulti 回档后重复创建计分板导致的崩溃；优化网页布局，支持同端口多实例切换服务器排行榜
+            修复 1.21.x 跨小版本服务端兼容问题；普通玩家进服仅显示“展开榜单信息”按钮，OP 保留详细管理菜单；发布 NeoForge 版本家族单 JAR
           curseforge-id: ${{ vars.CURSEFORGE_NEOFORGE_PROJECT_ID || vars.CURSEFORGE_PROJECT_ID || '1663124' }}
           curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
           retry-attempts: 3
@@ -340,7 +340,7 @@ jobs:
             1.21.11
           environment: server
           changelog: |
-            NeoForge 1.21.x 单次直接构建 JAR；声明兼容 1.21.x 版本范围
+            NeoForge 1.21.x 直接构建单 JAR；声明兼容 1.21.x 版本范围
           modrinth-id: ${{ vars.MODRINTH_NEOFORGE_PROJECT_ID || vars.MODRINTH_PROJECT_ID || 'TcDzE8EJ' }}
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           retry-attempts: 3
@@ -432,7 +432,7 @@ jobs:
             26.1.2
           environment: server
           changelog: |
-            NeoForge 26.1.x 单次直接构建 JAR；声明兼容 26.1.x 版本范围
+            NeoForge 26.1.x 直接构建单 JAR；声明兼容 26.1.x 版本范围
           modrinth-id: ${{ vars.MODRINTH_NEOFORGE_PROJECT_ID || vars.MODRINTH_PROJECT_ID || 'TcDzE8EJ' }}
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           retry-attempts: 3

@@ -426,11 +426,11 @@ final class StatReader {
         BLOCK_IDS.clear();
         REDSTONE_COMPONENT_ITEMS.clear();
         for (Block block : BuiltInRegistries.BLOCK) {
-            BLOCK_IDS.add(BuiltInRegistries.BLOCK.getKey(block).toString());
+            BLOCK_IDS.add(RegistryKeyCompat.id(BuiltInRegistries.BLOCK, block));
         }
         for (Item item : BuiltInRegistries.ITEM) {
-            String id = BuiltInRegistries.ITEM.getKey(item).toString();
-            if (item.components().get(DataComponents.FOOD) != null) FOOD_ITEMS.add(id);
+            String id = RegistryKeyCompat.id(BuiltInRegistries.ITEM, item);
+            if (ComponentLookupCompat.has(item.components(), DataComponents.FOOD)) FOOD_ITEMS.add(id);
             if (item instanceof BlockItem) BLOCK_ITEMS.add(id);
             if (RankBoardMod.isRedstoneComponent(item)) REDSTONE_COMPONENT_ITEMS.add(id);
         }

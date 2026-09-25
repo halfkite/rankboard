@@ -20,7 +20,10 @@ def usesLatestApi = minecraftVersionParts[0] >= 26 ||
         (minecraftVersionParts[0] == 1 && minecraftVersionParts[1] == 21 &&
                 minecraftVersionParts.size() > 2 && minecraftVersionParts[2] >= 11)
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(usesMojangNames ? 25 : 21)
+def compileRelease = usesMojangNames ? 25 : 21
+def configuredToolchain = project.findProperty('rankboard_java_toolchain')
+java.toolchain.languageVersion = JavaLanguageVersion.of(configuredToolchain != null
+        ? configuredToolchain.toString().toInteger() : compileRelease)
 
 neoForge {
     version = project.neo_version
@@ -34,7 +37,9 @@ neoForge {
         server {
             server()
             programArgument '--nogui'
-            gameDirectory = layout.buildDirectory.dir('run-server').get().asFile
+            gameDirectory = project.findProperty('rankboard_run_directory') != null
+                    ? file(project.property('rankboard_run_directory'))
+                    : layout.buildDirectory.dir('run-server').get().asFile
         }
     }
     mods {
@@ -231,4 +236,7 @@ if (project.hasProperty('universal_smoke')) {
     sourceSets.main.resources.setSrcDirs([])
 }
 
-tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = compileRelease
+}

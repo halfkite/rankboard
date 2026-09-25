@@ -1118,7 +1118,9 @@ public final class RankBoardMod implements ModInitializer {
     private void sendJoinExperience(ServerPlayerEntity player) {
         if (PlayerCompat.isFake(player)) return;
         RankBoardConfig config = RankBoardConfig.get();
-        sendLanguagePrompt(player);
+        ServerCommandSource source = PlayerCompat.source(player);
+        boolean op = CommandPermissionCompat.has(source, 2);
+        if (op) sendLanguagePrompt(player);
         if (config.welcomeEnabled) {
             player.sendMessage(Text.literal(RankBoardLanguage.text(player, "welcome",
                     config.displayName(PlayerCompat.server(player)))).formatted(Formatting.GRAY)
@@ -1129,7 +1131,7 @@ public final class RankBoardMod implements ModInitializer {
                     config.webAddress(PlayerCompat.server(player))))
                     .formatted(Formatting.AQUA), false);
         }
-        if (CommandPermissionCompat.has(player.getCommandSource(), 2)
+        if (op
                 && Boolean.parseBoolean(RankBoardConfig.value("web-switcher-op-hint-enabled"))
                 && RankBoardConfig.value("web-switcher-name").equalsIgnoreCase("auto")
                 && WebDashboard.hasSwitcherPeers()) {
@@ -1144,7 +1146,12 @@ public final class RankBoardMod implements ModInitializer {
         }
         if (config.joinMenuEnabled
                 && LeaderboardState.get(PlayerCompat.server(player)).isJoinMenuEnabled(player.getUuid())) {
-            menu(player.getCommandSource());
+            if (op) {
+                menu(source);
+            } else {
+                source.sendFeedback(() -> clickable("[" + localized(source, "menu.expand_details") + "]",
+                        Formatting.GOLD, "/leaderboard", localized(source, "menu.tooltip.expand_details")), false);
+            }
         }
     }
 
@@ -1157,7 +1164,7 @@ public final class RankBoardMod implements ModInitializer {
                 continue;
             }
             boolean active = player.isSneaking() && player.getPitch() <= -60.0F;
-            if (active && LOOK_MENU_HELD.add(player.getUuid())) menu(player.getCommandSource());
+            if (active && LOOK_MENU_HELD.add(player.getUuid())) menu(PlayerCompat.source(player));
             else if (!active) LOOK_MENU_HELD.remove(player.getUuid());
         }
     }
@@ -1914,7 +1921,7 @@ public final class RankBoardMod implements ModInitializer {
     }
 
     private static long custom(ServerPlayerEntity player, net.minecraft.util.Identifier stat) { return player.getStatHandler().getStat(Stats.CUSTOM.getOrCreateStat(stat)); }
-    private static long foodUsed(ServerPlayerEntity player) { return Registries.ITEM.stream().filter(item -> item.getComponents().get(DataComponentTypes.FOOD) != null).mapToLong(item -> player.getStatHandler().getStat(Stats.USED.getOrCreateStat(item))).sum(); }
+    private static long foodUsed(ServerPlayerEntity player) { return Registries.ITEM.stream().filter(item -> ComponentLookupCompat.has(item.getComponents(), DataComponentTypes.FOOD)).mapToLong(item -> player.getStatHandler().getStat(Stats.USED.getOrCreateStat(item))).sum(); }
     private static long mined(ServerPlayerEntity player) { return Registries.BLOCK.stream().mapToLong(block -> player.getStatHandler().getStat(Stats.MINED.getOrCreateStat(block))).sum(); }
     private static long placed(ServerPlayerEntity player) { return Registries.ITEM.stream().filter(BlockItem.class::isInstance).mapToLong(item -> player.getStatHandler().getStat(Stats.USED.getOrCreateStat(item))).sum(); }
     private static long dropped(ServerPlayerEntity player) { return Registries.ITEM.stream().mapToLong(item -> player.getStatHandler().getStat(Stats.DROPPED.getOrCreateStat(item))).sum(); }

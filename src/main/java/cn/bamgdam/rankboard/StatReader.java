@@ -425,7 +425,7 @@ final class StatReader {
         for (Block block : Registries.BLOCK) BLOCK_IDS.add(Registries.BLOCK.getId(block).toString());
         for (Item item : Registries.ITEM) {
             String id = Registries.ITEM.getId(item).toString();
-            if (item.getComponents().get(DataComponentTypes.FOOD) != null) FOOD_ITEMS.add(id);
+            if (ComponentLookupCompat.has(item.getComponents(), DataComponentTypes.FOOD)) FOOD_ITEMS.add(id);
             if (item instanceof BlockItem) BLOCK_ITEMS.add(id);
             if (RankBoardMod.isRedstoneComponent(item)) REDSTONE_COMPONENT_ITEMS.add(id);
         }

@@ -433,17 +433,17 @@ gradlew.bat build
 每个平台/版本家族都直接编译为一个 JAR，不再把多个小版本 JAR 嵌套到 `META-INF/jars`。PowerShell 构建命令：
 
 ```text
-powershell -ExecutionPolicy Bypass -File scripts/build-direct-fabric.ps1 -Target 1.21.x -OutputDirectory release -ModVersion 1.10.5
-powershell -ExecutionPolicy Bypass -File scripts/build-direct-neoforge.ps1 -Target 1.21.x -OutputDirectory release -ModVersion 1.10.5
-powershell -ExecutionPolicy Bypass -File scripts/build-direct-fabric.ps1 -Target 26.1.x -OutputDirectory release -ModVersion 1.10.5
-powershell -ExecutionPolicy Bypass -File scripts/build-direct-neoforge.ps1 -Target 26.1.x -OutputDirectory release -ModVersion 1.10.5
+powershell -ExecutionPolicy Bypass -File scripts/build-direct-fabric.ps1 -Target 1.21.x -OutputDirectory release -ModVersion 1.10.6
+powershell -ExecutionPolicy Bypass -File scripts/build-direct-neoforge.ps1 -Target 1.21.x -OutputDirectory release -ModVersion 1.10.6
+powershell -ExecutionPolicy Bypass -File scripts/build-direct-fabric.ps1 -Target 26.1.x -OutputDirectory release -ModVersion 1.10.6
+powershell -ExecutionPolicy Bypass -File scripts/build-direct-neoforge.ps1 -Target 26.1.x -OutputDirectory release -ModVersion 1.10.6
 ```
 
 每次成功构建会单独归档到 `mod-builds/` 的时间戳目录，并记录 SHA-256 与构建命令。
 
 ## GitHub Actions 发布
 
-先在 GitHub 创建并发布 Release（标签建议使用 `1.10.5` 或 `v1.10.5`）。发布事件会触发两个相互独立的流程：
+先在 GitHub 创建并发布 Release（标签使用 `1.10.6`）。发布事件会触发两个相互独立的流程：
 
 - `.github/workflows/release.yml` 只构建 Fabric。
 - `.github/workflows/release-neoforge.yml` 只构建 NeoForge。

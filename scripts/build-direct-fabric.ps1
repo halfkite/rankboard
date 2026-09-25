@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('1.21.x', '26.1.x', '26.2', '26.3')]
+    [ValidateSet('1.21.4', '1.21.10', '1.21.x', '26.1.x', '26.2', '26.3')]
     [string]$Target,
     [string]$OutputDirectory = 'build/libs',
     [string]$ModVersion = ''
@@ -21,9 +21,21 @@ $modVersion = if ([string]::IsNullOrWhiteSpace($ModVersion)) {
 } else { $ModVersion }
 
 $targets = @{
+    # Internal compatibility baselines only; release workflows still have four family targets.
+    '1.21.4' = @{
+        Minecraft = '1.21.4'; MappingType = 'yarn'; YarnMappings = '1.21.4+build.8'
+        Loader = '0.16.10'; Fabric = '0.119.4+1.21.4'; Dependency = '>=1.21 <1.22'
+        Java = 21
+    }
+    '1.21.10' = @{
+        Minecraft = '1.21.10'; MappingType = 'yarn'; YarnMappings = '1.21.10+build.3'
+        Loader = '0.16.10'; Fabric = '0.138.4+1.21.10'; Dependency = '>=1.21 <1.22'
+        Java = 21
+    }
     '1.21.x' = @{
-        Minecraft = '1.21.11'; MappingType = 'yarn'; YarnMappings = '1.21.11+build.6'
-        Loader = '0.16.10'; Fabric = '0.141.5+1.21.11'; Dependency = '>=1.21 <1.22'
+        # Build from the oldest API baseline after validating the direct JAR on the full family.
+        Minecraft = '1.21.4'; MappingType = 'yarn'; YarnMappings = '1.21.4+build.8'
+        Loader = '0.16.10'; Fabric = '0.119.4+1.21.4'; Dependency = '>=1.21 <1.22'
         Java = 21
     }
     '26.1.x' = @{

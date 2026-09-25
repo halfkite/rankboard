@@ -3,7 +3,6 @@ package cn.bamgdam.rankboard;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.mojang.authlib.properties.Property;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.storage.LevelResource;
@@ -24,7 +23,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.Base64;
-import java.util.Collection;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -69,8 +67,9 @@ final class AvatarCache {
     }
 
     private static String skinUrl(ServerPlayer player) {
-        Collection<Property> textures = player.getGameProfile().properties().get("textures");
-        for (Property property : textures) {
+        java.util.Collection<com.mojang.authlib.properties.Property> textures =
+                ProfileCompat.textures(player.getGameProfile());
+        for (com.mojang.authlib.properties.Property property : textures) {
             try {
                 String decoded = new String(Base64.getDecoder().decode(property.value()), StandardCharsets.UTF_8);
                 JsonObject root = JsonParser.parseString(decoded).getAsJsonObject();

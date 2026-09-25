@@ -284,7 +284,7 @@ jobs:
           game-versions: ${{ matrix.game_versions }}
           environment: server
           changelog: |
-            修复 QuickBackupMulti 回档后重复创建计分板导致的崩溃；优化网页布局，支持同端口多实例切换服务器排行榜
+            修复 1.21.x 跨小版本服务端兼容问题；普通玩家进服仅显示“展开榜单信息”按钮，OP 保留详细管理菜单；发布 Fabric 版本家族单 JAR
           modrinth-id: ${{ vars.MODRINTH_PROJECT_ID || 'TcDzE8EJ' }}
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           retry-attempts: 3
@@ -302,7 +302,7 @@ jobs:
           game-versions: ${{ matrix.game_versions }}
           environment: server
           changelog: |
-            修复 QuickBackupMulti 回档后重复创建计分板导致的崩溃；优化网页布局，支持同端口多实例切换服务器排行榜
+            修复 1.21.x 跨小版本服务端兼容问题；普通玩家进服仅显示“展开榜单信息”按钮，OP 保留详细管理菜单；发布 Fabric 版本家族单 JAR
           curseforge-id: ${{ vars.CURSEFORGE_PROJECT_ID || '1663124' }}
           curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
           retry-attempts: 3

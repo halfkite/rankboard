@@ -1,11 +1,11 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('1.21.x', '26.1.x', '26.2', '26.3')]
+    [ValidateSet('1.21.4', '1.21.x', '26.1.x', '26.2', '26.3')]
     [string]$Target,
     [string]$OutputDirectory = 'build/libs',
-    [string]$ModVersion = ''
+    [string]$ModVersion = '',
+    [string]$JavaToolchain = ''
 )
-
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $gradle = if ($IsWindows) { Join-Path $projectRoot 'gradlew.bat' } else { Join-Path $projectRoot 'gradlew' }
@@ -20,7 +20,9 @@ $modVersion = if ([string]::IsNullOrWhiteSpace($ModVersion)) {
 } else { $ModVersion }
 
 $targets = @{
-    '1.21.x' = @{ Minecraft = '1.21.11'; Range = '[1.21,1.22)'; Neo = '21.11.44'; NeoDependency = '21.0'; ParchmentMinecraft = '1.21.11'; Java = 21 }
+    # Internal compatibility baseline; release remains a single 1.21.x family JAR.
+    '1.21.4' = @{ Minecraft = '1.21.4'; Range = '[1.21,1.22)'; Neo = '21.4.157'; NeoDependency = '21.0'; ParchmentMinecraft = '1.21.4'; Java = 21 }
+    '1.21.x' = @{ Minecraft = '1.21.4'; Range = '[1.21,1.22)'; Neo = '21.4.157'; NeoDependency = '21.0'; ParchmentMinecraft = '1.21.4'; Java = 21 }
     '26.1.x' = @{ Minecraft = '26.1.2'; Range = '[26.1,26.2)'; Neo = '26.1.2.94'; NeoDependency = '26.1.0'; ParchmentMinecraft = '26.1.2'; Java = 25 }
     '26.2' = @{ Minecraft = '26.2'; Range = '[26.2]'; Neo = '26.2.0.41-beta'; NeoDependency = '26.2.0.41-beta'; ParchmentMinecraft = '26.2'; Java = 25 }
     '26.3' = @{ Minecraft = '26.3'; Range = '[26.3]'; Neo = '26.3.0.1-beta'; NeoDependency = '26.3.0.1-beta'; ParchmentMinecraft = '26.3'; Java = 25 }
@@ -37,6 +39,9 @@ $arguments = @(
     '-Pparchment_mappings_version=none',
     "-Pmod_version=$modVersion"
 )
+if (-not [string]::IsNullOrWhiteSpace($JavaToolchain)) {
+    $arguments += "-Prankboard_java_toolchain=$JavaToolchain"
+}
 
 Write-Host "Building one direct NeoForge JAR for $Target (compile target $($config.Minecraft))"
 & $gradle @arguments

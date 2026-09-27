@@ -268,7 +268,7 @@ scoreboard-title-color-enabled=true         # Color sidebar titles by metric
 scoreboard-live-update-enabled=true         # Refresh rankings on statistic changes
 scoreboard-live-update-window-seconds=30    # High-frequency detection window (range 1-300)
 scoreboard-live-update-threshold=100        # Begin throttling after this count (range 1-100000)
-scoreboard-live-update-throttle-seconds=30  # Minimum high-frequency refresh interval (range 1-3600)
+scoreboard-live-update-throttle-seconds=3   # Minimum high-frequency refresh interval (range 1-3600)
 
 # --- Filtering ---
 foreign-scoreboard-blocking-mode=ask        # Other-mod scoreboard mode: ask/enabled/disabled

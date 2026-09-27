@@ -268,7 +268,7 @@ scoreboard-title-color-enabled=true         # 计分板标题跟随榜单颜色
 scoreboard-live-update-enabled=true         # 玩家行为改变统计时实时刷新
 scoreboard-live-update-window-seconds=30    # 高频行为检测窗口（范围 1-300）
 scoreboard-live-update-threshold=100        # 超过此次数后降低刷新频率（范围 1-100000）
-scoreboard-live-update-throttle-seconds=30  # 高频时最短刷新间隔（范围 1-3600）
+scoreboard-live-update-throttle-seconds=3   # 高频时最短刷新间隔（范围 1-3600）
 
 # --- 玩家筛选 ---
 foreign-scoreboard-blocking-mode=ask        # 其他模组计分板屏蔽模式：ask/enabled/disabled

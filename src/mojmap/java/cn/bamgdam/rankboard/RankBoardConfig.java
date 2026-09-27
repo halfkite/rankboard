@@ -82,7 +82,7 @@ final class RankBoardConfig {
             option("scoreboard-live-update-enabled", "true", FileKind.MAIN, "客户端计分板", "玩家行为改变统计时是否即时刷新对应榜单；默认 true。"),
             option("scoreboard-live-update-window-seconds", "30", FileKind.MAIN, "客户端计分板", "高频行为统计窗口秒数；默认 30，范围 1-300。"),
             option("scoreboard-live-update-threshold", "100", FileKind.MAIN, "客户端计分板", "窗口内超过此次数后进入降频；默认 100，范围 1-100000。"),
-            option("scoreboard-live-update-throttle-seconds", "30", FileKind.MAIN, "客户端计分板", "高频榜单的最短刷新间隔秒数；默认 30，范围 1-3600。"),
+            option("scoreboard-live-update-throttle-seconds", "3", FileKind.MAIN, "客户端计分板", "高频榜单的最短刷新间隔秒数；默认 3，范围 1-3600。"),
             option("foreign-scoreboard-blocking-mode", "ask", FileKind.MAIN, "客户端计分板", "其他模组计分板屏蔽模式；默认 ask 不自动屏蔽并提示 OP 选择，可选 ask、enabled、disabled。"),
             option("mod-whitelist-enabled", "false", FileKind.MAIN, "玩家筛选", "是否只读取 config/rankboard/rankboard-whitelist.json 中的玩家；默认 false，保留原有服务器白名单逻辑。"),
             option("scoreboard-recipient-filter", "fake-only", FileKind.MAIN, "客户端计分板", "个人榜单数据接收过滤；fake-only 不发送给假人，false 不过滤，whitelist 仅名单内接收，blacklist 仅名单外接收。"),
@@ -165,7 +165,7 @@ final class RankBoardConfig {
         scoreboardLiveUpdateEnabled = bool(properties, "scoreboard-live-update-enabled", true);
         scoreboardLiveUpdateWindowSeconds = integer(properties, "scoreboard-live-update-window-seconds", 30, 1, 300);
         scoreboardLiveUpdateThreshold = integer(properties, "scoreboard-live-update-threshold", 100, 1, 100000);
-        scoreboardLiveUpdateThrottleSeconds = integer(properties, "scoreboard-live-update-throttle-seconds", 30, 1, 3600);
+        scoreboardLiveUpdateThrottleSeconds = integer(properties, "scoreboard-live-update-throttle-seconds", 3, 1, 3600);
         foreignScoreboardPolicy = ForeignScoreboardPolicy.parse(properties.getProperty("foreign-scoreboard-blocking-mode", "ask"));
         modWhitelistEnabled = bool(properties, "mod-whitelist-enabled", false);
         recipientFilter = RecipientFilter.parse(properties.getProperty("scoreboard-recipient-filter", "fake-only"));

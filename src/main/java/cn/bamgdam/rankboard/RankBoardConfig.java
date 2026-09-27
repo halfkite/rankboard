@@ -92,7 +92,7 @@ final class RankBoardConfig {
             option("scoreboard-live-update-enabled", "true", FileKind.MAIN, "客户端计分板", "玩家行为改变统计时是否即时刷新对应榜单；默认 true。"),
             option("scoreboard-live-update-window-seconds", "30", FileKind.MAIN, "客户端计分板", "高频行为统计窗口秒数；默认 30，范围 1-300。"),
             option("scoreboard-live-update-threshold", "100", FileKind.MAIN, "客户端计分板", "窗口内超过此次数后进入降频；默认 100，范围 1-100000。"),
-            option("scoreboard-live-update-throttle-seconds", "30", FileKind.MAIN, "客户端计分板", "高频榜单的最短刷新间隔秒数；默认 30，范围 1-3600。"),
+            option("scoreboard-live-update-throttle-seconds", "3", FileKind.MAIN, "客户端计分板", "高频榜单的最短刷新间隔秒数；默认 3，范围 1-3600。"),
             option("help-visibility", "all", FileKind.MAIN, "权限与帮助", "帮助可见范围；默认 all，可选 all、op、hidden。"),
             option("avatar-cache-enabled", "true", FileKind.MAIN, "玩家头像缓存", "是否缓存进服玩家的皮肤头像；默认 true。"),
             option("avatar-cache-days", "7", FileKind.MAIN, "玩家头像缓存", "头像缓存有效天数；默认 7，范围 1-365。"),
@@ -175,7 +175,7 @@ final class RankBoardConfig {
         scoreboardLiveUpdateEnabled = bool(properties, "scoreboard-live-update-enabled", true);
         scoreboardLiveUpdateWindowSeconds = integer(properties, "scoreboard-live-update-window-seconds", 30, 1, 300);
         scoreboardLiveUpdateThreshold = integer(properties, "scoreboard-live-update-threshold", 100, 1, 100000);
-        scoreboardLiveUpdateThrottleSeconds = integer(properties, "scoreboard-live-update-throttle-seconds", 30, 1, 3600);
+        scoreboardLiveUpdateThrottleSeconds = integer(properties, "scoreboard-live-update-throttle-seconds", 3, 1, 3600);
         foreignScoreboardPolicy = ForeignScoreboardPolicy.parse(
                 properties.getProperty("foreign-scoreboard-blocking-mode", "ask"));
         modWhitelistEnabled = bool(properties, "mod-whitelist-enabled", false);

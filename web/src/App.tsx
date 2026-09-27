@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Download, ExternalLink, Github, LayoutPanelTop, PackageOpen, Rows3, Server, Table2 } from "lucide-react";
 import BlurText from "@/components/BlurText/BlurText";
+import { serverSwitchUrl } from "@/serverSwitchUrl";
 
 type Metric = {
   id: string;
@@ -717,7 +718,7 @@ export default function App() {
                   if (!site.online) {
                     return <span key={`top-${site.url}-${site.weight}`} className={className} title={title} aria-disabled="true">{content}</span>;
                   }
-                  return <a key={`top-${site.url}-${site.weight}`} className={className} href={site.url} title={title}>{content}</a>;
+                  return <a key={`top-${site.url}-${site.weight}`} className={className} href={serverSwitchUrl(site.url, window.location.href)} title={title}>{content}</a>;
                 })}
               </div>}
             </div>

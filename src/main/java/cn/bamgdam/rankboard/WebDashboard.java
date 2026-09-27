@@ -680,8 +680,7 @@ final class WebDashboard {
         String selectedId = query(exchange.getRequestURI().getRawQuery()).getOrDefault("server", "").strip();
         LinkedHashMap<String, SiteEntry> unique = new LinkedHashMap<>();
         boolean currentIsLocal = selectedId.isEmpty() || selectedId.equals(instanceId);
-        SiteEntry current = new SiteEntry(switcherName,
-                currentIsLocal ? origin : origin + "?server=" + selectedId,
+        SiteEntry current = new SiteEntry(switcherName, origin,
                 switcherWeight, currentIsLocal, true);
         unique.put("local:" + instanceId, current);
 

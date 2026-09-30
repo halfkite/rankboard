@@ -19,7 +19,7 @@ final class PlayerCompat {
     }
     static World world(ServerPlayerEntity player) { return invokeByReturnType(player, World.class); }
     static ServerCommandSource source(ServerPlayerEntity player) {
-        return invokeByReturnType(server(player), ServerCommandSource.class).withEntity(player);
+        return PlayerCommandSourceCompat.source(player);
     }
 
     private static <T> T invokeByReturnType(Object target, Class<T> expectedType) {

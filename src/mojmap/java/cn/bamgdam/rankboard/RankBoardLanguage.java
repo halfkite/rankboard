@@ -21,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /** Loads editable JSON language packs for the Mojang-mapped 26.x build. */
 final class RankBoardLanguage {
     private static final Map<String, String> ZH = Map.ofEntries(
+            Map.entry("welcome", "欢迎来到 {0}"), Map.entry("web_hint", "可在 {0} 查看网页排行榜。"),
             Map.entry("language.name", "中文"), Map.entry("language.prompt", "请选择语言"),
             Map.entry("language.selected", "已选择 {0}。"),
             Map.entry("language.default_prompt", "是否将 {0} 设为全服默认聊天语言？"),
@@ -36,6 +37,7 @@ final class RankBoardLanguage {
             Map.entry("help.scoreboard", "计分板"), Map.entry("help.web", "网页与配置"),
             Map.entry("help.admin", "OP 管理"));
     private static final Map<String, String> EN = Map.ofEntries(
+            Map.entry("welcome", "Welcome to {0}"), Map.entry("web_hint", "View web rankings at {0}."),
             Map.entry("language.name", "English"), Map.entry("language.prompt", "Select language"),
             Map.entry("language.selected", "Language set to {0}."),
             Map.entry("language.default_prompt", "Set {0} as the server-wide default chat language?"),

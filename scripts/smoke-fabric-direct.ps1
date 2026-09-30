@@ -6,10 +6,13 @@ param(
     ),
     [int]$TimeoutSeconds = 180,
     [switch]$StartupOnly,
+    [switch]$PlayerDirectoryRegression,
+    [switch]$OfflineDirectoryRegression,
     [string]$FixtureRoot = 'wrapper-smoke'
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'player-directory-fixture.ps1')
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $artifact = (Resolve-Path -LiteralPath $ModJar).Path
 $testRoot = Join-Path $projectRoot ('.tmp/fabric-direct-smoke-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
@@ -17,6 +20,7 @@ $java = 'C:\Program Files\Java\jdk-25.0.3\bin\java.exe'
 $node = 'C:\Program Files\nodejs\node.exe'
 $joinClient = Join-Path $projectRoot '.tmp/mc-join/join-smoke.js'
 $results = [System.Collections.Generic.List[object]]::new()
+$passResult = if ($StartupOnly -and $OfflineDirectoryRegression) { 'PASS (startup, web, offline directory API; player login not tested)' } elseif ($StartupOnly) { 'PASS (server startup only)' } else { 'PASS' }
 
 if (-not (Test-Path -LiteralPath $java)) { throw "Java runtime not found: $java" }
 if (-not (Test-Path -LiteralPath $node)) { throw "Node.js runtime not found: $node" }
@@ -52,6 +56,7 @@ for ($index = 0; $index -lt $Versions.Count; $index++) {
 
     $serverPort = 25700 + $index
     $webPort = 28700 + $index
+    $rconPort = 29700 + $index
     # minecraft-protocol does not carry metadata for every point release. Use a
     # client build with the same protocol number; the server under test remains
     # the exact version represented by this fixture.
@@ -70,7 +75,9 @@ for ($index = 0; $index -lt $Versions.Count; $index++) {
 server-port=$serverPort
 online-mode=false
 enable-query=false
-enable-rcon=false
+enable-rcon=$(($PlayerDirectoryRegression -or $OfflineDirectoryRegression).ToString().ToLowerInvariant())
+rcon.port=$rconPort
+rcon.password=rankboard-smoke-only
 level-name=world
 max-tick-time=60000
 view-distance=2
@@ -84,6 +91,7 @@ pause-when-empty-seconds=0
         "host=127.0.0.1`nport=$webPort`n", $encoding)
 
     $stdout = Join-Path $testDirectory 'stdout.log'
+    if ($OfflineDirectoryRegression) { Initialize-DirectoryRegressionFixture $testDirectory $version }
     $stderr = Join-Path $testDirectory 'stderr.log'
     $process = $null
     $ready = $false
@@ -119,8 +127,19 @@ pause-when-empty-seconds=0
             } catch { $failure = "Dashboard HTTP smoke failed: $($_.Exception.Message)" }
             if (-not $dashboardHttp -and -not $failure) { $failure = 'Dashboard did not return the expected page.' }
         }
+        if ($ready -and $OfflineDirectoryRegression -and -not $failure) {
+            $apiOutput = & $node (Join-Path $PSScriptRoot 'player-directory-offline-smoke.cjs') $rconPort 2>&1 | Out-String
+            $apiPassed = $LASTEXITCODE -eq 0 -and $apiOutput.Contains('OFFLINE_DIRECTORY_OK')
+            $apiOutput | Set-Content -LiteralPath (Join-Path $testDirectory 'directory-api-smoke.log') -Encoding utf8
+            if (-not $apiPassed) { $failure = "Offline directory API regression failed: $apiOutput" }
+        }
         if ($ready -and -not $StartupOnly -and -not $failure) {
-            $joinOutput = & $node $joinClient $serverPort $joinVersion 2>&1 | Out-String
+            if ($PlayerDirectoryRegression) {
+                $joinOutput = & $node (Join-Path $projectRoot 'scripts/player-directory-join-smoke.cjs') $serverPort $joinVersion $rconPort 2>&1 | Out-String
+            } else {
+                $joinOutput = & $node $joinClient $serverPort $joinVersion 2>&1 | Out-String
+            }
+            $joinOutput | Set-Content -LiteralPath (Join-Path $testDirectory 'join-smoke.log') -Encoding utf8
             $joined = $LASTEXITCODE -eq 0 -and $joinOutput.Contains('JOIN_OK')
             if (-not $joined) { $failure = "Offline player join failed: $joinOutput" }
             $logText = Get-Content -Raw -LiteralPath $latestLog
@@ -141,13 +160,15 @@ pause-when-empty-seconds=0
         ServerReady = $ready
         DashboardHttp = $dashboardHttp
         PlayerJoined = $joined
-        Result = if ($failure) { $failure } elseif ($StartupOnly) { 'PASS (server startup only)' } else { 'PASS' }
+        Result = if ($failure) { $failure } else { $passResult }
+        OfflineDirectoryApi = if ($OfflineDirectoryRegression) { $apiPassed } else { $null }
         TestDirectory = $testDirectory
     })
     $joinResult = if ($StartupOnly) { 'not-tested' } else { [string]$joined }
-    Write-Host "$version server-ready=$ready web-http=$dashboardHttp join=$joinResult result=$(if($failure){$failure}elseif($StartupOnly){'PASS (server startup only)'}else{'PASS'})"
+    Write-Host "$version server-ready=$ready web-http=$dashboardHttp join=$joinResult result=$(if($failure){$failure}else{$passResult})"
 }
 
+$results | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $testRoot 'test-results.json') -Encoding utf8
 $results | Format-Table -AutoSize
 Write-Host "Logs and isolated worlds: $testRoot"
-if ($results | Where-Object { $_.Result -ne 'PASS' }) { exit 1 }
+if ($results | Where-Object { $_.Result -notlike 'PASS*' }) { exit 1 }

@@ -5,10 +5,13 @@ param(
         '1.21.6', '1.21.7', '1.21.8', '1.21.9', '1.21.10', '1.21.11'
     ),
     [int]$TimeoutSeconds = 420,
-    [switch]$StartupOnly
+    [switch]$StartupOnly,
+    [switch]$PlayerDirectoryRegression,
+    [switch]$OfflineDirectoryRegression
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'player-directory-fixture.ps1')
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $neoForgeProject = Join-Path $projectRoot 'neoforge'
 $artifact = (Resolve-Path -LiteralPath $ModJar).Path
@@ -23,7 +26,8 @@ $neoVersions = @{
     '1.21.3' = '21.3.96'; '1.21.4' = '21.4.157'; '1.21.5' = '21.5.98'
     '1.21.6' = '21.6.20-beta'; '1.21.7' = '21.7.25-beta'; '1.21.8' = '21.8.54'
     '1.21.9' = '21.9.16-beta'; '1.21.10' = '21.10.64'; '1.21.11' = '21.11.44'
-    '26.1.2' = '26.1.2.94'; '26.2' = '26.2.0.41-beta'; '26.3' = '26.3.0.1-beta'
+    '26.1' = '26.1.0.19-beta'; '26.1.1' = '26.1.1.15-beta'; '26.1.2' = '26.1.2.94'
+    '26.2' = '26.2.0.41-beta'; '26.3' = '26.3.0.1-beta'
 }
 
 if (-not (Test-Path -LiteralPath $env:JAVA_HOME)) { throw 'JAVA_HOME must point to the required JDK for NeoForge smoke tests.' }
@@ -44,13 +48,16 @@ for ($index = 0; $index -lt $Versions.Count; $index++) {
 
     $serverPort = 25800 + $index
     $webPort = 28800 + $index
+    $rconPort = 29800 + $index
     $encoding = [System.Text.UTF8Encoding]::new($false)
     [System.IO.File]::WriteAllText((Join-Path $testDirectory 'eula.txt'), "eula=true`n", $encoding)
     [System.IO.File]::WriteAllText((Join-Path $testDirectory 'server.properties'), @"
 server-port=$serverPort
 online-mode=false
 enable-query=false
-enable-rcon=false
+enable-rcon=$(($PlayerDirectoryRegression -or $OfflineDirectoryRegression).ToString().ToLowerInvariant())
+rcon.port=$rconPort
+rcon.password=rankboard-smoke-only
 level-name=world
 max-tick-time=60000
 view-distance=2
@@ -65,10 +72,12 @@ pause-when-empty-seconds=0
         '1.21.2' { '1.21.3'; break }
         '1.21.7' { '1.21.8'; break }
         '1.21.10' { '1.21.9'; break }
+        '26.1.1' { '26.1'; break }
         '26.1.2' { '26.1'; break }
         default { $version }
     }
     $stdout = Join-Path $testDirectory 'gradle.stdout.log'
+    if ($OfflineDirectoryRegression) { Initialize-DirectoryRegressionFixture $testDirectory $version }
     $stderr = Join-Path $testDirectory 'gradle.stderr.log'
     $gameLog = Join-Path $testDirectory 'logs/latest.log'
     $range = if ($version.StartsWith('26.1')) { '[26.1,26.2)' } elseif ($version -eq '26.2') { '[26.2]' } elseif ($version -eq '26.3') { '[26.3]' } else { '[1.21,1.22)' }
@@ -81,7 +90,7 @@ pause-when-empty-seconds=0
         "-Pminecraft_version=$version", "-Pminecraft_version_range=$range",
         "-Pneo_version=$($neoVersions[$version])", "-Pneo_dependency_version=$dependency",
         "-Pparchment_minecraft_version=$version", '-Pparchment_mappings_version=none',
-        '-Pmod_version=1.10.6', '--no-daemon', '--console=plain'
+        '-Pmod_version=1.10.9', '--no-daemon', '--console=plain'
     )
     $argumentLine = ($command | ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }) -join ' '
     $process = $null
@@ -114,8 +123,19 @@ pause-when-empty-seconds=0
             } catch { $failure = "Dashboard HTTP smoke failed: $($_.Exception.Message)" }
             if (-not $dashboardHttp -and -not $failure) { $failure = 'Dashboard did not return the expected page.' }
         }
+        if ($ready -and $OfflineDirectoryRegression -and -not $failure) {
+            $apiOutput = & $node (Join-Path $PSScriptRoot 'player-directory-offline-smoke.cjs') $rconPort 2>&1 | Out-String
+            $apiPassed = $LASTEXITCODE -eq 0 -and $apiOutput.Contains('OFFLINE_DIRECTORY_OK')
+            $apiOutput | Set-Content -LiteralPath (Join-Path $testDirectory 'directory-api-smoke.log') -Encoding utf8
+            if (-not $apiPassed) { $failure = "Offline directory API regression failed: $apiOutput" }
+        }
         if ($ready -and -not $StartupOnly -and -not $failure) {
-            $joinOutput = & $node $joinClient $serverPort $joinVersion 2>&1 | Out-String
+            if ($PlayerDirectoryRegression) {
+                $joinOutput = & $node (Join-Path $projectRoot 'scripts/player-directory-join-smoke.cjs') $serverPort $joinVersion $rconPort 2>&1 | Out-String
+            } else {
+                $joinOutput = & $node $joinClient $serverPort $joinVersion 2>&1 | Out-String
+            }
+            $joinOutput | Set-Content -LiteralPath (Join-Path $testDirectory 'join-smoke.log') -Encoding utf8
             $joined = $LASTEXITCODE -eq 0 -and $joinOutput.Contains('JOIN_OK')
             if (-not $joined) { $failure = "Offline player join failed: $joinOutput" }
             $text = Get-Content -Raw -LiteralPath $gameLog
@@ -133,12 +153,13 @@ pause-when-empty-seconds=0
             $process.WaitForExit()
         }
     }
-    $result = if ($failure) { $failure } elseif ($StartupOnly) { 'PASS (server startup only)' } else { 'PASS' }
-    $results.Add([pscustomobject]@{ Minecraft = $version; NeoForge = $neoVersions[$version]; ServerReady = $ready; DashboardHttp = $dashboardHttp; PlayerJoined = $joined; Result = $result; TestDirectory = $testDirectory })
+    $result = if ($failure) { $failure } elseif ($StartupOnly -and $OfflineDirectoryRegression) { 'PASS (startup, web, offline directory API; player login not tested)' } elseif ($StartupOnly) { 'PASS (server startup only)' } else { 'PASS' }
+    $results.Add([pscustomobject]@{ Minecraft = $version; NeoForge = $neoVersions[$version]; ServerReady = $ready; DashboardHttp = $dashboardHttp; PlayerJoined = $joined; OfflineDirectoryApi = if ($OfflineDirectoryRegression) { $apiPassed } else { $null }; Result = $result; TestDirectory = $testDirectory })
     $joinResult = if ($StartupOnly) { 'not-tested' } else { [string]$joined }
     Write-Host "$version NeoForge=$($neoVersions[$version]) ready=$ready web-http=$dashboardHttp join=$joinResult result=$result"
 }
 
+$results | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $testRoot 'test-results.json') -Encoding utf8
 $results | Format-Table -AutoSize
 Write-Host "Isolated NeoForge smoke data: $testRoot"
-if ($results | Where-Object { $_.Result -ne 'PASS' }) { exit 1 }
+if ($results | Where-Object { $_.Result -notlike 'PASS*' }) { exit 1 }

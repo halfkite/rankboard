@@ -601,7 +601,9 @@ public final class RankBoardMod implements ModInitializer {
         }
         if (RankBoardConfig.get().helpVisible(source)) {
             if (hasSecondRowButton) secondRow = secondRow.copy().append(Component.literal(" "));
-            secondRow = secondRow.copy().append(clickable("[help]", ChatFormatting.GREEN,
+            String helpLabel = source.getEntity() instanceof ServerPlayer player
+                    ? RankBoardLanguage.text(player, "menu.help") : "帮助help";
+            secondRow = secondRow.copy().append(clickable("[" + helpLabel + "]", ChatFormatting.GREEN,
                     "/leaderboard help", "查看 RankBoard 帮助"));
             hasSecondRowButton = true;
         }

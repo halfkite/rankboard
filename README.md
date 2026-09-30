@@ -48,7 +48,7 @@
 
 RankBoard 是一个服务端排行榜模组，支持 Fabric 和 NeoForge。玩家不需要客户端模组即可使用原版计分板和网页查看排行榜。
 
-当前版本：`1.10.8`　|　[完整中文文档](docs/rankboard.md)　|　[English documentation](docs/rankboard_en.md)
+当前开发版本：`1.10.9`（Fabric / NeoForge 全系列已同步构建，尚未发布）　|　[构建包与测试范围](docs/compatibility-audit-1.10.9.md)　|　[完整中文文档](docs/rankboard.md)　|　[English documentation](docs/rankboard_en.md)
 
 ### 功能简介
 
@@ -128,7 +128,7 @@ Warning: The published 1.10.5 `mc1.21.x` single JAR is not binary-compatible wit
 
 RankBoard is a server-side leaderboard mod supporting Fabric and NeoForge. Players do not need a client-side mod to use the vanilla sidebar or the web dashboard.
 
-Current version: `1.10.8`　|　[中文文档](docs/rankboard.md)　|　[English documentation](docs/rankboard_en.md)
+Development version: `1.10.9` (all Fabric / NeoForge families synchronized and built; not yet released)　|　[Builds and test coverage](docs/compatibility-audit-1.10.9.md)　|　[中文文档](docs/rankboard.md)　|　[English documentation](docs/rankboard_en.md)
 
 ### Highlights
 
